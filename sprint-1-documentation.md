@@ -1,14 +1,14 @@
 # Sprint 1 Documentation
 ## Secure Distributed Messenger
 
-**Team Name:** [Your Team Name]
+**Team Name:** Group 25
 
 **Team Members:**
-- [Name 1] - [Role/Responsibilities]
-- [Name 2] - [Role/Responsibilxities]
-- [Name 3] - [Role/Responsibilities]
-- [Name 4] - [Role/Responsibilities]
-- [Name 5] - [Role/Responsibilities]
+- Donald Tsang - [Role/Responsibilities]
+- Ethan Chang - [Role/Responsibilxities]
+- Cooper Miles - [Role/Responsibilities]
+- Teju Rajbabu - [Role/Responsibilities]
+- N/A - N/A
 
 **Date:** [Submission Date]
 
