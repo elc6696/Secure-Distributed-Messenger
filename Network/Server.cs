@@ -19,6 +19,7 @@
 
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using SecureMessenger.Core;
 
 namespace SecureMessenger.Network;
@@ -62,9 +63,22 @@ public class Server
     /// 6. Start AcceptClientsAsync on a background Task
     /// 7. Print a message indicating the server is listening
     /// </summary>
-    public void Start(int port)
+    public async Task Start(int port)
     {
-        throw new NotImplementedException("Implement Start() - see TODO in comments above");
+        Port = port; // Stores the port number to Port property
+
+        _cancellationTokenSource = new CancellationTokenSource(); // Creates a new CancellationTokenSource for managing cancellation
+
+        _listener = new TcpListener(IPAddress.Any, port); // Creates a TcpListener that listens on all network interfaces and the specified port
+
+        _listener.Start(); // Starts the TcpListener to begin accepting incoming connection requests
+
+        IsListening = true; // Sets the IsListening property to true, indicating that the server is now listening for connections
+
+        _ = Task.Run(() => AcceptClientsAsync()); // Starts the AcceptClientsAsync method on a background Task to handle incoming connections asynchronously    
+
+        Console.WriteLine($"Client listening on: {port}"); // Prints a message to the console indicating that a client has connected, along with the client's endpoint information
+
     }
 
     /// <summary>
@@ -82,6 +96,8 @@ public class Server
     /// </summary>
     private async Task AcceptClientsAsync()
     {
+        
+
         throw new NotImplementedException("Implement AcceptClientsAsync() - see TODO in comments above");
     }
 
