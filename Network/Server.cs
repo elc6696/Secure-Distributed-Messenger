@@ -19,6 +19,8 @@
 
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using SecureMessenger.Core;
 
@@ -149,7 +151,70 @@ public class Server
     /// </summary>
     private async Task ReceiveFromClientAsync(TcpClient client, string endpoint)
     {
-        throw new NotImplementedException("Implement ReceiveFromClientAsync() - see TODO in comments above");
+        NetworkStream stream = client.GetStream(); //Getting NetworkStream from client
+
+        byte[] buffer = new byte[4]; //Creating a 4-byte buffer for reading message length
+
+        try // Outer try: ensures DisconnectClient always runs in the finally block
+        {
+            while (!_cancellationTokenSource!.Token.IsCancellationRequested && client.Connected) //Loop while not cancelled and client is connected
+            {
+                try
+                {
+                    int bytesRead = await stream.ReadAsync(buffer, 0, 4, _cancellationTokenSource.Token); //Read 4 bytes for the message length (length-prefix framing)
+
+                    if (bytesRead == 0) // If bytesRead == 0, client disconnected - break
+                    {
+                        break;
+                    }
+
+                    int messageLength = BitConverter.ToInt32(buffer, 0); // Convert bytes to int using BitConverter.ToInt32
+
+                    if (messageLength <= 0 || messageLength >= 1000000) // Validate length (> 0 and < 1,000,000)
+                    {
+                        Console.WriteLine($"Invalid message length: {messageLength} from {endpoint}");
+                        break;
+                    }
+
+                    byte[] payloadBuffer = new byte[messageLength]; // Create a buffer for the message payload
+
+                    int totalBytesRead = 0; // Variable to keep track of total bytes read for the payload
+
+                    while (totalBytesRead < messageLength) // Read the full payload (may require multiple reads)
+                    {
+                        int read = await stream.ReadAsync(payloadBuffer, totalBytesRead, messageLength - totalBytesRead, _cancellationTokenSource.Token);
+
+                        if (read == 0) // If read == 0, client disconnected so program breaks
+                        {
+                            break;
+                        }
+
+                        totalBytesRead += read; // Update total bytes read
+                    }
+
+                    string jsonString = Encoding.UTF8.GetString(payloadBuffer); //Convert to string using Encoding.UTF8.GetString
+
+                    Message? message = JsonSerializer.Deserialize<Message>(jsonString); //Deserialize JSON to Message using JsonSerializer.Deserialize
+
+                    if (message != null)
+                    {
+                        OnMessageReceived?.Invoke(message); //Invoke OnMessageReceived event
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    break; // Normal shutdown when cancellation requested, exit the loop
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error receiving from client {endpoint}: {ex.Message}"); // Log unexpected errors and continue the loop
+                }
+            }
+        }
+        finally
+        {
+            DisconnectClient(client, endpoint); //Always clean up the client connection when the loop exits for any reason
+        }
     }
 
     /// <summary>
