@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Ethan Chang
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 1: Threading & Basic Networking
@@ -96,9 +96,32 @@ public class Server
     /// </summary>
     private async Task AcceptClientsAsync()
     {
-        
+        while (!_cancellationTokenSource!.Token.IsCancellationRequested)
+        {
+            try
+            {
+                TcpClient client = await _listener!.AcceptTcpClientAsync(_cancellationTokenSource.Token); // Waits asynchronously for an incoming connection request and accepts it, returning a TcpClient, the connected client
 
-        throw new NotImplementedException("Implement AcceptClientsAsync() - see TODO in comments above");
+                string endpoint = client.Client.RemoteEndPoint.ToString(); // Endpoint string coming from client's RemoteEndPoint
+
+                lock (_clientsLock) // Locks the _clientsLock to ensure thread safety when accessing the _clients list
+                {
+                    _clients.Add(client); // Adds the newly connected client to the _clients list
+                }
+
+                OnClientConnected?.Invoke(endpoint); // Invokes the OnClientConnected event
+
+                _ = Task.Run(() => ReceiveFromClientAsync(client, endpoint)); // Starts the ReceiveFromClientAsync method for this client on a background Task to handle incoming messages from the client asynchronously
+            }
+            catch (OperationCanceledException)
+            {
+                break; // Normal shutdown - cancellation was requested, exit the loop
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error accepting client: {ex.Message}"); // Log unexpected errors and continue the loop
+            }
+        }
     }
 
     /// <summary>
