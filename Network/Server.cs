@@ -230,7 +230,16 @@ public class Server
     /// </summary>
     private void DisconnectClient(TcpClient client, string endpoint)
     {
-        throw new NotImplementedException("Implement DisconnectClient() - see TODO in comments above");
+        Socket socket = client.Client; // Get the underlying Socket from the TcpClient
+
+            lock (_clientsLock) // Lock the _clientsLock to ensure thread safety when accessing the _clients list
+            {
+                _clients.Remove(client); // Remove the client from the _clients list
+            }
+
+        socket.Close(); // Close the client connection
+
+        OnClientDisconnected?.Invoke(endpoint); // Invoke the OnClientDisconnected event with the endpoint information        
     }
 
     /// <summary>
