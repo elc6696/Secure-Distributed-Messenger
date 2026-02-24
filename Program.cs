@@ -1,4 +1,5 @@
 // Donald Tsang
+// Donald Tsang
 // CSCI 251 - Secure Distributed Messenger
 // Group Project
 //
@@ -7,6 +8,8 @@
 // (Continue enhancing in Sprints 2 & 3)
 //
 
+using System.Net;
+using Microsoft.VisualBasic;
 using System.Net;
 using Microsoft.VisualBasic;
 using SecureMessenger.Core;
@@ -59,12 +62,15 @@ class Program
     private static Server? _server;
     private static Client? _client;
     private static ConsoleUI? _ui;
+    private static ConsoleUI? _ui;
     private static string _username = "User";
     private static MessageQueue _queue = new();
     
     private static CancellationTokenSource _cts = new();
     //
     // Sprint 3 additions:
+    private static PeerDiscovery? _peerDiscovery;
+    private static HeartbeatMonitor? _heartbeatMonitor;
     private static PeerDiscovery? _peerDiscovery;
     private static HeartbeatMonitor? _heartbeatMonitor;
 
@@ -92,6 +98,38 @@ class Program
 
         Console.WriteLine("Type /help for available commands");
         Console.WriteLine();
+
+        Thread receiveThread = new Thread(() =>
+        {
+            try
+            {
+                while (!_cts.Token.IsCancellationRequested)
+                {
+                    Message message = _queue.DequeueIncoming(_cts.Token);
+                    _ui.DisplayMessage(message);
+                    // TODO (Whoever does Console UI) Display the message in UI
+                }
+            } catch (OperationCanceledException) {}
+        });
+        receiveThread!.IsBackground = true;
+        receiveThread!.Name = "ReceiveThread";
+        receiveThread!.Start();
+
+        Thread sendThread = new Thread(() =>
+        {
+            try
+            {
+                while (!_cts.Token.IsCancellationRequested)
+                {
+                    Message message = _queue.DequeueOutgoing(_cts.Token);
+                    _server?.Broadcast(message);
+                    _client?.Send(message);
+                }
+            } catch (OperationCanceledException) {}
+        });
+        sendThread!.IsBackground = true;
+        sendThread!.Name = "SendThread";
+        sendThread!.Start();
 
         Thread receiveThread = new Thread(() =>
         {
@@ -164,6 +202,12 @@ class Program
         // 1. Stop the server
         // 2. Disconnect the client
         // 3. (Sprint 3) Stop peer discovery and heartbeat monitor
+        _cts.Cancel();
+        _queue.CompleteAdding();
+        receiveThread.Join();
+        sendThread.Join();
+        _server?.Stop();
+        _client?.Disconnect();
         _cts.Cancel();
         _queue.CompleteAdding();
         receiveThread.Join();
