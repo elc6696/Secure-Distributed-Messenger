@@ -302,8 +302,8 @@ public class Server
     /// </summary>
     public void Stop()
     {
-        _cancellationTokenSource.Cancel(); // Cancel the cancellation token
-        _listener.Stop(); // Stop the listener
+        _cancellationTokenSource?.Cancel(); // Cancel the cancellation token
+        _listener?.Stop(); // Stop the listener
         IsListening = false; // Set IsListening to false
         lock (_clientsLock) // Lock the _clientsLock to ensure thread safety when accessing the _clients list
             {
