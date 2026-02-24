@@ -62,9 +62,16 @@ class Program
     private static string _username = "User";
     
     private static CancellationTokenSource _cts = new();
+    // private static Server? _server;
+    // private static Client? _client;
+    // private static ConsoleUI? _ui; (DONE)
+    // private static string _username = "User";
+    //
     // Sprint 3 additions:
     private static PeerDiscovery? _peerDiscovery;
     private static HeartbeatMonitor? _heartbeatMonitor;
+
+    private static ConsoleUI? _ui;
 
     static async Task Main(string[] args)
     {
@@ -74,8 +81,10 @@ class Program
         // TODO: Initialize components
         // 1. Create Server for incoming connections
         // 2. Create Client for outgoing connection
-        // 3. Create ConsoleUI for user interface
+        // 3. Create ConsoleUI for user interface (DONE)
         // 4. (Optional) Create MessageQueue if using producer/consumer pattern
+
+        _ui = new ConsoleUI();
 
         // TODO: Subscribe to events
         // Server events:
@@ -127,6 +136,7 @@ class Program
         bool running = true;
         while (running)
         {
+            // DONE:
             // TODO: Implement the main input loop
             // 1. Read a line from the console
             // 2. Skip empty input
@@ -142,18 +152,27 @@ class Program
             var input = Console.ReadLine();
             if (string.IsNullOrEmpty(input)) continue;
 
-            // Temporary basic command handling - replace with full implementation
-            switch (input.ToLower())
+            CommandResult commandResult = _ui.ParseCommand(input);
+
+            switch(commandResult.CommandType)
             {
-                case "/quit":
-                case "/exit":
+                case CommandType.Connect:
+                    // Not implemented because Client doesn't exist
+                    // await _client.ConnectAsync(commandResult.Args[0], commandResult.Args[1]);
+                    break;
+                case CommandType.Listen:
+                    // Not implemented because Server doesn't exist 
+                    // _server.Start(commandResult.Args[0]);
+                    break;
+                case CommandType.Quit:
                     running = false;
                     break;
-                case "/help":
-                    ShowHelp();
+                case CommandType.Help:
+                    _ui.ShowHelp();
                     break;
                 default:
-                    Console.WriteLine("Command not yet implemented. See TODO comments.");
+                    // Not implemented because SendMessage isn't implemented
+                    // SendMessage(commandResult.Message);
                     break;
             }
         }
