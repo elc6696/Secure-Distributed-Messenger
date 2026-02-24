@@ -4,9 +4,9 @@
 **Team Name:** Group 25
 
 **Team Members:**
-- [Name 1] - [Role/Responsibilities]
-- [Name 2] - [Role/Responsibilxities]
-- [Name 3] - [Role/Responsibilities]
+- Donald Tsang - Multi-Threaded Architecture
+- Ethan Chang - Basic TCP Communication
+- Cooper Miles - Console UI
 - [Name 4] - [Role/Responsibilities]
 - [Name 5] - [Role/Responsibilities]
 
@@ -22,7 +22,7 @@
 
 ### Building the Project
 ```
-[Commands to build the project]
+dotnet build
 ```
 
 ---
@@ -31,7 +31,7 @@
 
 ### Starting the Application
 ```
-[Commands to run the application]
+dotnet run
 ```
 
 ### Command Line Arguments (if any)
@@ -48,6 +48,8 @@
 | `/connect <ip> <port>` | Connect to a peer | `/connect 192.168.1.100 5000` |
 | `/listen <port>` | Start listening for connections | `/listen 5000` |
 | `/quit` | Exit the application | `/quit` |
+| `/exit` | Exit the application | `/exit` |
+| `/help` | Display the commands | `/help` |
 | | | |
 
 ---
@@ -69,13 +71,13 @@
 
 ## Features Implemented
 
-- [ ] Multi-threaded architecture
+- [x] Multi-threaded architecture
 - [ ] Thread-safe message queue
-- [ ] TCP server (listen for connections)
-- [ ] TCP client (connect to peers)
-- [ ] Send/receive text messages
-- [ ] Graceful disconnection handling
-- [ ] Console UI with commands
+- [x] TCP server (listen for connections)
+- [x] TCP client (connect to peers)
+- [x] Send/receive text messages
+- [x] Graceful disconnection handling
+- [x] Console UI with commands
 
 ---
 
