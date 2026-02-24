@@ -196,7 +196,28 @@ public class Client
     /// </summary>
     public void Send(Message message)
     {
-        throw new NotImplementedException("Implement Send() - see TODO in comments above");
+
+        if (!IsConnected)
+        {
+            Console.WriteLine("Cannot send message: not connected to server.");
+            return;
+        }
+
+        try
+        {
+            string json = JsonSerializer.Serialize(message); // Serialize the message to JSON
+            byte[] payloadBytes = Encoding.UTF8.GetBytes(json); // Convert JSON string to bytes
+            byte[] lengthPrefix = BitConverter.GetBytes(payloadBytes.Length); // Create a 4-byte length prefix
+
+            _stream!.Write(lengthPrefix, 0, lengthPrefix.Length); // Write the length prefix to the stream
+            _stream.Write(payloadBytes, 0, payloadBytes.Length); // Write the payload to the stream
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending message: {ex.Message}");
+
+        }
+
     }
 
     /// <summary>
