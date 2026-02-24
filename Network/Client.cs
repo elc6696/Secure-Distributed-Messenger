@@ -1,4 +1,4 @@
-// Ethan Chang
+// [Your Name Here]
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 1: Threading & Basic Networking
@@ -22,9 +22,7 @@
 //               integrate with PeerDiscovery for automatic connections
 //
 
-using System.Linq.Expressions;
 using System.Net.Sockets;
-using System.Numerics;
 using System.Text;
 using System.Text.Json;
 using SecureMessenger.Core;
@@ -73,25 +71,9 @@ public class Client
     /// </summary>
     public async Task<bool> ConnectAsync(string host, int port)
     {
-        _cancellationTokenSource = new CancellationTokenSource(); // Create a new CancellationTokenSource
-
-        _client = new TcpClient(); // Create a new TcpClient
-
-        try
-        {
-            await _client.ConnectAsync(host, port, _cancellationTokenSource.Token); // Asynchronously connect to the specified host and port
-            _stream = _client.GetStream(); // Get the NetworkStream from the client
-            _serverEndpoint = $"{host}:{port}"; // Store the endpoint string (e.g
-            OnConnected?.Invoke(_serverEndpoint); // Invoke the OnConnected event with the server endpoint
-            _ = Task.Run(ReceiveAsync); // Start the ReceiveAsync method on a background Task
-            return true; // Return true on successful connection
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error connecting to server: {ex.Message}");
-            return false;
-        }
+        throw new NotImplementedException("Implement ConnectAsync() - see TODO in comments above");
     }
+
     /// <summary>
     /// Receive loop - runs on background thread.
     /// Uses length-prefix framing: 4 bytes for length, then JSON payload.
@@ -117,66 +99,7 @@ public class Client
     /// </summary>
     private async Task ReceiveAsync()
     {
-        try
-        {
-            byte[] lengthBuffer = new byte[4]; // Buffer for reading message length
-            while (!_cancellationTokenSource!.Token.IsCancellationRequested && _client?.Connected == true)
-            {
-                int totalBytesRead = 0;
-
-                while (totalBytesRead < 4)
-                {
-                    int bytesRead = await _stream!.ReadAsync(lengthBuffer, totalBytesRead, 4 - totalBytesRead, _cancellationTokenSource.Token);
-                    if (bytesRead == 0)
-                    {
-                        Console.WriteLine("Server disconnected.");
-                        return; // Server disconnected
-                    }
-                    totalBytesRead += bytesRead;
-                }
-
-                int messageLength = BitConverter.ToInt32(lengthBuffer, 0); // Convert bytes to int for message length
-
-                if (messageLength <= 0 || messageLength > 1_000_000)
-                {
-                    Console.WriteLine($"Invalid message length: {messageLength}");
-                    return; // Invalid length, close connection
-                }
-
-                byte[] payloadBuffer = new byte[messageLength];
-
-                totalBytesRead = 0;
-                while (totalBytesRead < messageLength)
-                {
-                    int bytesRead = await _stream!.ReadAsync(payloadBuffer, totalBytesRead, messageLength - totalBytesRead, _cancellationTokenSource.Token);
-                    if (bytesRead == 0)
-                    {
-                        Console.WriteLine("Server disconnected during payload read.");
-                        return; // Server disconnected
-                    }
-                    totalBytesRead += bytesRead;
-                }
-
-                string payload = Encoding.UTF8.GetString(payloadBuffer);
-
-                Message? message = JsonSerializer.Deserialize<Message>(payload);
-
-                OnMessageReceived?.Invoke(message); // Invoke the OnMessageReceived event with the deserialized message
-
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Normal shutdown, do nothing
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error in receive loop: {ex.Message}");
-        }
-        finally
-        {
-            OnDisconnected?.Invoke(_serverEndpoint); // Invoke the OnDisconnected event with the server endpoint
-        }
+        throw new NotImplementedException("Implement ReceiveAsync() - see TODO in comments above");
     }
 
     /// <summary>
@@ -196,28 +119,7 @@ public class Client
     /// </summary>
     public void Send(Message message)
     {
-
-        if (!IsConnected)
-        {
-            Console.WriteLine("Cannot send message: not connected to server.");
-            return;
-        }
-
-        try
-        {
-            string json = JsonSerializer.Serialize(message); // Serialize the message to JSON
-            byte[] payloadBytes = Encoding.UTF8.GetBytes(json); // Convert JSON string to bytes
-            byte[] lengthPrefix = BitConverter.GetBytes(payloadBytes.Length); // Create a 4-byte length prefix
-
-            _stream!.Write(lengthPrefix, 0, lengthPrefix.Length); // Write the length prefix to the stream
-            _stream.Write(payloadBytes, 0, payloadBytes.Length); // Write the payload to the stream
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error sending message: {ex.Message}");
-
-        }
-
+        throw new NotImplementedException("Implement Send() - see TODO in comments above");
     }
 
     /// <summary>
@@ -230,9 +132,6 @@ public class Client
     /// </summary>
     public void Disconnect()
     {
-        _cancellationTokenSource?.Cancel(); // Cancel the cancellation token
-        _stream?.Close(); // Close the stream
-        _client?.Close(); // Close the client
-
+        throw new NotImplementedException("Implement Disconnect() - see TODO in comments above");
     }
 }
