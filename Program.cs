@@ -76,10 +76,8 @@ class Program
         // TODO: Initialize components
         // 1. Create Server for incoming connections
         // 2. Create Client for outgoing connection
-        // 3. Create ConsoleUI for user interface (DONE)
+        // 3. Create ConsoleUI for user interface
         // 4. (Optional) Create MessageQueue if using producer/consumer pattern
-
-        _ui = new ConsoleUI();
 
         // TODO: Subscribe to events
         // Server events:
@@ -131,7 +129,6 @@ class Program
         bool running = true;
         while (running)
         {
-            // DONE:
             // TODO: Implement the main input loop
             // 1. Read a line from the console
             // 2. Skip empty input
@@ -147,27 +144,18 @@ class Program
             var input = Console.ReadLine();
             if (string.IsNullOrEmpty(input)) continue;
 
-            CommandResult commandResult = _ui.ParseCommand(input);
-
-            switch(commandResult.CommandType)
+            // Temporary basic command handling - replace with full implementation
+            switch (input.ToLower())
             {
-                case CommandType.Connect:
-                    // Not implemented because Client doesn't exist
-                    // await _client.ConnectAsync(commandResult.Args[0], commandResult.Args[1]);
-                    break;
-                case CommandType.Listen:
-                    // Not implemented because Server doesn't exist 
-                    // _server.Start(commandResult.Args[0]);
-                    break;
-                case CommandType.Quit:
+                case "/quit":
+                case "/exit":
                     running = false;
                     break;
-                case CommandType.Help:
-                    _ui.ShowHelp();
+                case "/help":
+                    ShowHelp();
                     break;
                 default:
-                    // Not implemented because SendMessage isn't implemented
-                    // SendMessage(commandResult.Message);
+                    Console.WriteLine("Command not yet implemented. See TODO comments.");
                     break;
             }
         }
