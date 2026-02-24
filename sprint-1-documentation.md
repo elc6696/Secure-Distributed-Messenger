@@ -1,7 +1,7 @@
 # Sprint 1 Documentation
 ## Secure Distributed Messenger
 
-**Team Name:** [Your Team Name]
+**Team Name:** Group 25
 
 **Team Members:**
 - [Name 1] - [Role/Responsibilities]
@@ -10,7 +10,7 @@
 - [Name 4] - [Role/Responsibilities]
 - [Name 5] - [Role/Responsibilities]
 
-**Date:** [Submission Date]
+**Date:** 02/02/2026
 
 ---
 
