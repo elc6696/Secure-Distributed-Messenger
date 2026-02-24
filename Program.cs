@@ -60,6 +60,7 @@ class Program
     private static Client? _client;
     private static ConsoleUI? _ui;
     private static string _username = "User";
+    private static MessageQueue _queue = new();
     
     private static CancellationTokenSource _cts = new();
     // private static Server? _server;
@@ -70,8 +71,6 @@ class Program
     // Sprint 3 additions:
     private static PeerDiscovery? _peerDiscovery;
     private static HeartbeatMonitor? _heartbeatMonitor;
-
-    private static ConsoleUI? _ui;
 
     static async Task Main(string[] args)
     {
