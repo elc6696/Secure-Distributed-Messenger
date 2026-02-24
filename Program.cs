@@ -127,6 +127,9 @@ class Program
                 case CommandType.Quit:
                     running = false;
                     break;
+                case CommandType.Help:
+                    _ui.ShowHelp();
+                    break;
                 default:
                     // Not implemented because SendMessage isn't implemented
                     // SendMessage(commandResult.Message);
