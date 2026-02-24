@@ -1,4 +1,4 @@
-// Ethan Chang
+// [Your Name Here]
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 1: Threading & Basic Networking
@@ -19,9 +19,6 @@
 
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
 using SecureMessenger.Core;
 
 namespace SecureMessenger.Network;
@@ -65,22 +62,9 @@ public class Server
     /// 6. Start AcceptClientsAsync on a background Task
     /// 7. Print a message indicating the server is listening
     /// </summary>
-    public async Task Start(int port)
+    public void Start(int port)
     {
-        Port = port; // Stores the port number to Port property
-
-        _cancellationTokenSource = new CancellationTokenSource(); // Creates a new CancellationTokenSource for managing cancellation
-
-        _listener = new TcpListener(IPAddress.Any, port); // Creates a TcpListener that listens on all network interfaces and the specified port
-
-        _listener.Start(); // Starts the TcpListener to begin accepting incoming connection requests
-
-        IsListening = true; // Sets the IsListening property to true, indicating that the server is now listening for connections
-
-        _ = Task.Run(() => AcceptClientsAsync()); // Starts the AcceptClientsAsync method on a background Task to handle incoming connections asynchronously    
-
-        Console.WriteLine($"Client listening on: {port}"); // Prints a message to the console indicating that a client has connected, along with the client's endpoint information
-
+        throw new NotImplementedException("Implement Start() - see TODO in comments above");
     }
 
     /// <summary>
@@ -98,32 +82,7 @@ public class Server
     /// </summary>
     private async Task AcceptClientsAsync()
     {
-        while (!_cancellationTokenSource!.Token.IsCancellationRequested)
-        {
-            try
-            {
-                TcpClient client = await _listener!.AcceptTcpClientAsync(_cancellationTokenSource.Token); // Waits asynchronously for an incoming connection request and accepts it, returning a TcpClient, the connected client
-
-                string endpoint = client.Client.RemoteEndPoint.ToString(); // Endpoint string coming from client's RemoteEndPoint
-
-                lock (_clientsLock) // Locks the _clientsLock to ensure thread safety when accessing the _clients list
-                {
-                    _clients.Add(client); // Adds the newly connected client to the _clients list
-                }
-
-                OnClientConnected?.Invoke(endpoint); // Invokes the OnClientConnected event
-
-                _ = Task.Run(() => ReceiveFromClientAsync(client, endpoint)); // Starts the ReceiveFromClientAsync method for this client on a background Task to handle incoming messages from the client asynchronously
-            }
-            catch (OperationCanceledException)
-            {
-                break; // Normal shutdown - cancellation was requested, exit the loop
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error accepting client: {ex.Message}"); // Log unexpected errors and continue the loop
-            }
-        }
+        throw new NotImplementedException("Implement AcceptClientsAsync() - see TODO in comments above");
     }
 
     /// <summary>
@@ -151,70 +110,7 @@ public class Server
     /// </summary>
     private async Task ReceiveFromClientAsync(TcpClient client, string endpoint)
     {
-        NetworkStream stream = client.GetStream(); //Getting NetworkStream from client
-
-        byte[] buffer = new byte[4]; //Creating a 4-byte buffer for reading message length
-
-        try // Outer try: ensures DisconnectClient always runs in the finally block
-        {
-            while (!_cancellationTokenSource!.Token.IsCancellationRequested && client.Connected) //Loop while not cancelled and client is connected
-            {
-                try
-                {
-                    int bytesRead = await stream.ReadAsync(buffer, 0, 4, _cancellationTokenSource.Token); //Read 4 bytes for the message length (length-prefix framing)
-
-                    if (bytesRead == 0) // If bytesRead == 0, client disconnected - break
-                    {
-                        break;
-                    }
-
-                    int messageLength = BitConverter.ToInt32(buffer, 0); // Convert bytes to int using BitConverter.ToInt32
-
-                    if (messageLength <= 0 || messageLength >= 1000000) // Validate length (> 0 and < 1,000,000)
-                    {
-                        Console.WriteLine($"Invalid message length: {messageLength} from {endpoint}");
-                        break;
-                    }
-
-                    byte[] payloadBuffer = new byte[messageLength]; // Create a buffer for the message payload
-
-                    int totalBytesRead = 0; // Variable to keep track of total bytes read for the payload
-
-                    while (totalBytesRead < messageLength) // Read the full payload (may require multiple reads)
-                    {
-                        int read = await stream.ReadAsync(payloadBuffer, totalBytesRead, messageLength - totalBytesRead, _cancellationTokenSource.Token);
-
-                        if (read == 0) // If read == 0, client disconnected so program breaks
-                        {
-                            break;
-                        }
-
-                        totalBytesRead += read; // Update total bytes read
-                    }
-
-                    string jsonString = Encoding.UTF8.GetString(payloadBuffer); //Convert to string using Encoding.UTF8.GetString
-
-                    Message? message = JsonSerializer.Deserialize<Message>(jsonString); //Deserialize JSON to Message using JsonSerializer.Deserialize
-
-                    if (message != null)
-                    {
-                        OnMessageReceived?.Invoke(message); //Invoke OnMessageReceived event
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    break; // Normal shutdown when cancellation requested, exit the loop
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error receiving from client {endpoint}: {ex.Message}"); // Log unexpected errors and continue the loop
-                }
-            }
-        }
-        finally
-        {
-            DisconnectClient(client, endpoint); //Always clean up the client connection when the loop exits for any reason
-        }
+        throw new NotImplementedException("Implement ReceiveFromClientAsync() - see TODO in comments above");
     }
 
     /// <summary>
@@ -230,16 +126,7 @@ public class Server
     /// </summary>
     private void DisconnectClient(TcpClient client, string endpoint)
     {
-        Socket socket = client.Client; // Get the underlying Socket from the TcpClient
-
-            lock (_clientsLock) // Lock the _clientsLock to ensure thread safety when accessing the _clients list
-            {
-                _clients.Remove(client); // Remove the client from the _clients list
-            }
-
-        socket.Close(); // Close the client connection
-
-        OnClientDisconnected?.Invoke(endpoint); // Invoke the OnClientDisconnected event with the endpoint information        
+        throw new NotImplementedException("Implement DisconnectClient() - see TODO in comments above");
     }
 
     /// <summary>
@@ -258,36 +145,7 @@ public class Server
     /// </summary>
     public void Broadcast(Message message)
     {
-        string json = JsonSerializer.Serialize(message); // Serialize the message to JSON using JsonSerializer.Serialize
-
-        byte[] bytes = Encoding.UTF8.GetBytes(json); // Convert to bytes using Encoding.UTF8.GetBytes
-
-        byte[] lengthPrefix = BitConverter.GetBytes(bytes.Length); // Create a 4-byte length prefix using BitConverter.GetBytes
-
-        List<TcpClient> clientsCopy; // Variable to hold a copy of the _clients list
-
-        lock (_clientsLock)
-        {
-            clientsCopy = new List<TcpClient>(_clients);
-        }
-
-        for (int i = 0; i < clientsCopy.Count; i++) // Loop through each connected client
-        {
-            TcpClient client = clientsCopy[i]; // Get the current client from the copy of the _clients list
-
-            try
-            {
-                NetworkStream stream = client.GetStream(); // Get the NetworkStream for the current client
-
-                stream.Write(lengthPrefix, 0, lengthPrefix.Length); // Write the length prefix (4 bytes) to the client's stream
-
-                stream.Write(bytes, 0, bytes.Length); // Write the payload (the serialized message) to the client's stream
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error broadcasting to client {client.Client.RemoteEndPoint}: {ex.Message}"); // Log any exceptions that occur while trying to broadcast to an individual client, but continue broadcasting to other clients
-            }
-        }
+        throw new NotImplementedException("Implement Broadcast() - see TODO in comments above");
     }
 
     /// <summary>
@@ -302,17 +160,7 @@ public class Server
     /// </summary>
     public void Stop()
     {
-        _cancellationTokenSource.Cancel(); // Cancel the cancellation token
-        _listener.Stop(); // Stop the listener
-        IsListening = false; // Set IsListening to false
-        lock (_clientsLock) // Lock the _clientsLock to ensure thread safety when accessing the _clients list
-            {
-                foreach (var client in _clients) // Loop through each client in the _clients list
-                {
-                    client.Close(); // Close each client connection
-                }
-                _clients.Clear(); // Clear the _clients list after closing all connections
-            }
+        throw new NotImplementedException("Implement Stop() - see TODO in comments above");
     }
 
     /// <summary>
