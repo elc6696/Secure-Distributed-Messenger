@@ -59,13 +59,19 @@ dotnet run
 ### Threading Model
 [Describe your threading approach - which threads exist and what each does]
 
-- **Main Thread:** [Purpose]
-- **Receive Thread:** [Purpose]
-- **Send Thread:** [Purpose]
-- [Additional threads...]
+- **Main Thread:** Runs the console input loop (`Console.ReadLine()`) and parses commands (`ConsoleUI.ParseCommand()`) and dispatches all command actions. Also manages startup and graceful shutdown.
+- **Receive Thread:** A backround thread (`ReceiveThread`) that blocks on `_queue.DequeueIncoming(cancellationToken))`. For incoming messages, we wake it up via `_ui.DisplayMessage()`to print it. We exit cleanly when the cancellation token is triggered on shutdown. 
+- **Send Thread:** A backround thread (`SendThread`) that blocks on `_queue.DequeueOutgoing(cancellationToken)`. When outgoing messages that are in queue, it wakes up and calls `_server?.BroadcastMessage(message)` if listening or `_client?.Send(message)` if connected. We exit cleanly on cancellation.
 
 ### Thread-Safe Message Queue
-[Describe your message queue implementation and synchronization approach]
+The `MessageQueue` class inside `Core/MessageQueue.cs`. implements a producer/consumer pattern using two separate `BlockingCollection<Message>` instances. `_incoming` for messages received from the network and `_outgoing` for messages to be sent. `BlockingCollection<Message>` is thread-safe, so we do not use manual locking required.
+
+* `EnqueueIncoming()` / `EnqueueOutgoing()` 
+    * Thread-safe adds to queue by network event handlers
+* `DequeueIncoming(token)` / `DequeueOutgoing(token)` 
+    * Block `Take()` calls that sleep the consumer thread until message is available
+* `CancellationTokenSource.Cancel()`
+    * Unblcok `Take()` by passing the cancellation token, and `CompleteAdding()` finalizes adding items. 
 
 ---
 
@@ -96,8 +102,6 @@ dotnet run
 ## Known Issues
 
 | Issue | Description | Workaround |
-|-------|-------------|------------|
-| | | |
 
 ---
 
