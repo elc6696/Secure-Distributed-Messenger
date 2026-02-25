@@ -83,7 +83,19 @@ class Program
         // 3. Create ConsoleUI for user interface (DONE)
         // 4. (Optional) Create MessageQueue if using producer/consumer pattern
 
+        _server = new Server();
+        _client = new Client();
         _ui = new ConsoleUI();
+
+        _server.OnMessageReceived += message =>
+        {
+            _queue.EnqueueIncoming(message);
+        };
+
+        _client.OnMessageReceived += message =>
+        {
+            _queue.EnqueueIncoming(message);
+        };
 
         // TODO: Subscribe to events
         // Server events:
@@ -106,8 +118,13 @@ class Program
                 while (!_cts.Token.IsCancellationRequested)
                 {
                     Message message = _queue.DequeueIncoming(_cts.Token);
-                    _ui.DisplayMessage(message);
-                    // TODO (Whoever does Console UI) Display the message in UI
+                    if (message.Sender == "System")
+                    {
+                        _ui.DisplaySystem(message.Content);
+                    }else {
+                        _ui.DisplayMessage(message);
+                    }
+                
                 }
             } catch (OperationCanceledException) {}
         });
@@ -123,7 +140,9 @@ class Program
                 {
                     Message message = _queue.DequeueOutgoing(_cts.Token);
                     _server?.Broadcast(message);
-                    _client?.Send(message);
+                    if (_client?.IsConnected == true) {
+                        _client?.Send(message);
+                    }
                 }
             } catch (OperationCanceledException) {}
         });
@@ -157,21 +176,24 @@ class Program
             {
                 case CommandType.Connect:
                     // Not implemented because Client doesn't exist
-                    // await _client.ConnectAsync(commandResult.Args[0], commandResult.Args[1]);
+                    await _client.ConnectAsync(commandResult.Args[0], int.Parse(commandResult.Args[1]));
                     break;
                 case CommandType.Listen:
                     // Not implemented because Server doesn't exist 
-                    // _server.Start(commandResult.Args[0]);
+                    await _server.Start(int.Parse(commandResult.Args[0]));
+                    _ui.DisplaySystem($"Listening on port {commandResult.Args[0]}");  // add this
                     break;
                 case CommandType.Quit:
                     running = false;
                     break;
-                case CommandType.Help:
+                case CommandType.Help:  
                     _ui.ShowHelp();
                     break;
                 default:
                     // Not implemented because SendMessage isn't implemented
-                    // SendMessage(commandResult.Message);
+                    string sender = (_client?.IsConnected ?? false) ? _username : "System";
+                    var msg = new Message { Sender = sender, Content = commandResult.Message! };
+                    _queue.EnqueueOutgoing(msg);
                     break;
             }
         }
@@ -188,6 +210,7 @@ class Program
         _client?.Disconnect();
 
         Console.WriteLine("Goodbye!");
+
     }
 
     /// <summary>

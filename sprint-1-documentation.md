@@ -1,7 +1,7 @@
 # Sprint 1 Documentation
 ## Secure Distributed Messenger
 
-**Team Name:** Group 25
+**Team Name:** [Your Team Name]
 
 **Team Members:**
 - Donald Tsang - Multi-Threaded Architecture
@@ -10,7 +10,7 @@
 - [Name 4] - [Role/Responsibilities]
 - [Name 5] - [Role/Responsibilities]
 
-**Date:** 02/27/2026
+**Date:** [Submission Date]
 
 ---
 

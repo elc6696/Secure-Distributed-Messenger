@@ -1,3 +1,4 @@
+
 // Cooper Miles
 // CSCI 251 - Secure Distributed Messenger
 //
@@ -36,7 +37,7 @@ public class ConsoleUI
     {
         // string time = DateTime.Now.ToString("HH:mm:ss");
         // string response = "[" + time + "] " + message.Content.ToUpper();
-        string response = message.Timestamp.ToString("HH:mm:ss");
+        string response = $"[{message.Timestamp:HH:mm:ss}] {message.Sender}: {message.Content}";
         Console.WriteLine(response);
     }
 
