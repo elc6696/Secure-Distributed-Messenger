@@ -92,10 +92,10 @@ The `MessageQueue` class inside `Core/MessageQueue.cs`. implements a producer/co
 ### Test Cases
 | Test | Expected Result | Actual Result | Pass/Fail |
 |------|-----------------|---------------|-----------|
-| Two instances can connect | Connection established | | |
-| Messages sent and received | Message appears on other instance | | |
-| Disconnection handled | No crash, appropriate message | | |
-| Thread safety under load | No race conditions | | |
+| Two instances can connect | Connection established | Connections are established | Pass |
+| Messages sent and received | Message appears on other instance | Message does appear on other instance | Pass |
+| Disconnection handled | No crash, appropriate message | No crash, says Goodbye | Pass |
+| Thread safety under load | No race conditions | No race conditions | Pass |
 
 ---
 
