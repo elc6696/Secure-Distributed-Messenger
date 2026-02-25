@@ -7,7 +7,7 @@
 - Donald Tsang - Multi-Threaded Architecture
 - Ethan Chang - Basic TCP Communication
 - Cooper Miles - Console UI
-- [Name 4] - [Role/Responsibilities]
+- Teju - Management, documentation, debugging (helping all of us)
 - [Name 5] - [Role/Responsibilities]
 
 **Date:** 02/27/2026
@@ -108,8 +108,8 @@ The `MessageQueue` class inside `Core/MessageQueue.cs`. implements a producer/co
 ## Video Demo Checklist
 
 Your demo video (3-5 minutes) should show:
-- [ ] Starting two instances of the application
-- [ ] Connecting the instances
-- [ ] Sending messages in both directions
-- [ ] Disconnecting gracefully
+- [x] Starting two instances of the application
+- [x] Connecting the instances
+- [x] Sending messages in both directions
+- [x] Disconnecting gracefully
 - [ ] (Optional) Showing thread-safe behavior under load
