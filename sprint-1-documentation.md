@@ -8,7 +8,6 @@
 - Ethan Chang - Basic TCP Communication
 - Cooper Miles - Console UI
 - Teju - Management, documentation, debugging (helping all of us)
-- [Name 5] - [Role/Responsibilities]
 
 **Date:** 02/27/2026
 
@@ -78,7 +77,7 @@ The `MessageQueue` class inside `Core/MessageQueue.cs`. implements a producer/co
 ## Features Implemented
 
 - [x] Multi-threaded architecture
-- [ ] Thread-safe message queue
+- [x] Thread-safe message queue
 - [x] TCP server (listen for connections)
 - [x] TCP client (connect to peers)
 - [x] Send/receive text messages
