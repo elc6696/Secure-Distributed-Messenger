@@ -1,7 +1,7 @@
 # Sprint 1 Documentation
 ## Secure Distributed Messenger
 
-**Team Name:** [Your Team Name]
+**Team Name:** Group 25
 
 **Team Members:**
 - Donald Tsang - Multi-Threaded Architecture
@@ -10,15 +10,14 @@
 - Teju - Management, documentation, debugging (helping all of us)
 - [Name 5] - [Role/Responsibilities]
 
-**Date:** [Submission Date]
+**Date:** 2/27/26
 
 ---
 
 ## Build Instructions
 
 ### Prerequisites
-- [List required software, e.g., .NET SDK version]
-- [Any other dependencies]
+- NET SDK Version 9.0
 
 ### Building the Project
 ```
@@ -57,8 +56,6 @@ dotnet run
 ## Architecture Overview
 
 ### Threading Model
-[Describe your threading approach - which threads exist and what each does]
-
 - **Main Thread:** Runs the console input loop (`Console.ReadLine()`) and parses commands (`ConsoleUI.ParseCommand()`) and dispatches all command actions. Also manages startup and graceful shutdown.
 - **Receive Thread:** A backround thread (`ReceiveThread`) that blocks on `_queue.DequeueIncoming(cancellationToken))`. For incoming messages, we wake it up via `_ui.DisplayMessage()`to print it. We exit cleanly when the cancellation token is triggered on shutdown. 
 - **Send Thread:** A backround thread (`SendThread`) that blocks on `_queue.DequeueOutgoing(cancellationToken)`. When outgoing messages that are in queue, it wakes up and calls `_server?.BroadcastMessage(message)` if listening or `_client?.Send(message)` if connected. We exit cleanly on cancellation.
