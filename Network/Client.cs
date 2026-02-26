@@ -237,15 +237,13 @@ public class Client
         _client?.Close(); // Close the client
 
     }
-
     public async Task<int> getClientID()
     {
         return await Task.FromResult(this._clientID);
     }
 
-    public async Task<int> setClientID(int id)
+    public async void setClientID(int id)
     {
         this._clientID = id;
-        return this._clientID;
     }
 }

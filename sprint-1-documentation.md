@@ -74,7 +74,7 @@ The `MessageQueue` class inside `Core/MessageQueue.cs`. implements a producer/co
 ## Features Implemented
 
 - [x] Multi-threaded architecture
-- [ ] Thread-safe message queue
+- [x] Thread-safe message queue
 - [x] TCP server (listen for connections)
 - [x] TCP client (connect to peers)
 - [x] Send/receive text messages
@@ -98,6 +98,8 @@ The `MessageQueue` class inside `Core/MessageQueue.cs`. implements a producer/co
 ## Known Issues
 
 | Issue | Description | Workaround |
+|-------|-------------|------------|
+| No name | Users have no identification/name | Used a random number generator and made a getter and setter under `getClientId()` and `setClientId()`. Made these asynchronous. |
 
 ---
 
