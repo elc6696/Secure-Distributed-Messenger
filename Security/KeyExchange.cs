@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Ethan Chang
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 2: Security & Encryption
@@ -53,7 +53,7 @@ public class KeyExchange
     /// </summary>
     public KeyExchange()
     {
-        throw new NotImplementedException("Implement constructor - create RsaEncryption instance");
+        _rsa = new RsaEncryption();
     }
 
     /// <summary>
@@ -65,7 +65,8 @@ public class KeyExchange
     /// </summary>
     public byte[] GetPublicKey()
     {
-        throw new NotImplementedException("Implement GetPublicKey() - see TODO in comments above");
+        State = ConnectionState.SendingPublicKey;
+        return _rsa.ExportPublicKey();
     }
 
     /// <summary>
@@ -77,7 +78,8 @@ public class KeyExchange
     /// </summary>
     public void ReceivePublicKey(byte[] peerPublicKey)
     {
-        throw new NotImplementedException("Implement ReceivePublicKey() - see TODO in comments above");
+        State = ConnectionState.ReceivingPublicKey;
+        _peerPublicKey = peerPublicKey;
     }
 
     /// <summary>
@@ -92,7 +94,10 @@ public class KeyExchange
     /// </summary>
     public byte[] CreateEncryptedSessionKey()
     {
-        throw new NotImplementedException("Implement CreateEncryptedSessionKey() - see TODO in comments above");
+        _sessionKey = AesEncryption.GenerateKey();
+        State = ConnectionState.SendingSessionKey;
+        byte[] encrypt_key = _rsa.EncryptSessionKey(_sessionKey, _peerPublicKey);
+        return encrypt_key;
     }
 
     /// <summary>
@@ -105,7 +110,8 @@ public class KeyExchange
     /// </summary>
     public void ReceiveEncryptedSessionKey(byte[] encryptedKey)
     {
-        throw new NotImplementedException("Implement ReceiveEncryptedSessionKey() - see TODO in comments above");
+        _sessionKey = _rsa.DecryptSessionKey(encryptedKey);
+        State = ConnectionState.Established;
     }
 
     /// <summary>
@@ -116,7 +122,7 @@ public class KeyExchange
     /// </summary>
     public void Complete()
     {
-        throw new NotImplementedException("Implement Complete() - see TODO in comments above");
+        State = ConnectionState.Established;
     }
 
     /// <summary>

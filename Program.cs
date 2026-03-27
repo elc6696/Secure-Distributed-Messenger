@@ -64,6 +64,10 @@ class Program
     
     private static CancellationTokenSource _cts = new();
 
+    //Sprint 2 additions:
+    private static KeyExchange _keyExchange = new();
+    private static byte[]? _myPublicKey;
+
     // Sprint 3 additions:
     private static PeerDiscovery? _peerDiscovery;
     private static HeartbeatMonitor? _heartbeatMonitor;
@@ -79,13 +83,41 @@ class Program
 
         _server.OnMessageReceived += message =>
         {
-            _queue.EnqueueIncoming(message);
-            _server?.Broadcast(message); 
+            _server?.Broadcast(message);
+            if (message.Type == MessageType.Text)
+                _queue.EnqueueIncoming(message);
         };
 
         _client.OnMessageReceived += message =>
         {
-            _queue.EnqueueIncoming(message);
+            if (message.Type == MessageType.KeyExchange && message.PublicKey != null
+                && !message.PublicKey.SequenceEqual(_myPublicKey ?? Array.Empty<byte>()))
+            {
+                _keyExchange.ReceivePublicKey(message.PublicKey);
+                byte[] encryptedKey = _keyExchange.CreateEncryptedSessionKey();
+                var sessionMessage = new Message
+                {
+                    Type = MessageType.SessionKey,
+                    Sender = _username,
+                    PublicKey = encryptedKey
+                };
+                _client?.Send(sessionMessage);
+                _keyExchange.Complete();
+                _client.SessionKey = new AesEncryption(_keyExchange.SessionKey!);
+                _ui?.DisplaySystem("Key exchange complete, session key established.");
+    
+            }
+            else if (message.Type == MessageType.SessionKey && message.PublicKey != null
+                && !_keyExchange.IsEstablished)
+            {
+                _keyExchange.ReceiveEncryptedSessionKey(message.PublicKey);
+                _client.SessionKey = new AesEncryption(_keyExchange.SessionKey!);
+                _ui?.DisplaySystem("Session key received and decrypted, secure communication established.");
+            }
+            else if (message.Type == MessageType.Text)
+            {
+                _queue.EnqueueIncoming(message);
+            }
         };
 
         // TODO: Subscribe to events
@@ -153,6 +185,16 @@ class Program
                         await _client.ConnectAsync(commandResult.Args[0], int.Parse(commandResult.Args[1]));
                     }
                     _client.setClientID(Random.Shared.Next(1, 1000)); // Assign a random client ID for demonstration
+                    // Sprint 2 Addition with Key Exchange:
+                    _keyExchange = new KeyExchange();
+                    _myPublicKey = _keyExchange.GetPublicKey();
+                    var publicKeyMessage = new Message
+                    {
+                        Type = MessageType.KeyExchange,
+                        Sender = _username,
+                        PublicKey = _myPublicKey
+                    };
+                    _client.Send(publicKeyMessage);
                     break;
                 case CommandType.Listen:
                     if(commandResult.Args[0] == "local") {
@@ -177,7 +219,7 @@ class Program
                     }
                     else
                     {
-                        await _server.CreateRoom(int.Parse(commandResult.Args[0]));
+                        await _server.CreateRoom(commandResult.Args[0]);
                         _ui.DisplaySystem($"Room {commandResult.Args[0]} created.");
                     }
                     break;
@@ -189,8 +231,8 @@ class Program
                     }
                     else
                     {
-                        List<int> _rooms = _server.GetRooms();
-                        foreach (int room in _rooms)
+                        List<string> _rooms = _server.GetRooms();
+                        foreach (string room in _rooms)
                         {
                             Console.WriteLine(room);
                         }
