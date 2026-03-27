@@ -46,8 +46,8 @@ public class Server
 {
     private TcpListener? _listener;
     private readonly List<TcpClient> _clients = new();
-    private static readonly List<int> _rooms = new();
-    private readonly Dictionary<TcpClient, int> _roomToClient = new();
+    private static readonly List<string> _rooms = new();
+    private readonly Dictionary<TcpClient, string> _roomToClient = new();
     private readonly Dictionary<TcpClient, AesEncryption> _clientSessionKeys = new();
     private static readonly object _clientsLock = new();
     private CancellationTokenSource? _cancellationTokenSource;
@@ -220,7 +220,7 @@ public class Server
                             message.Content = aes.Decrypt(message.EncryptedContent);
                         }
 
-                        if (message.Signature != null && message.PublicKey != null)
+                        if (message.Signature != null && message.PublicKey != null && !string.IsNullOrEmpty(message.Content))
                         {
                             byte[] data = Encoding.UTF8.GetBytes(message.Content);
 
@@ -235,59 +235,55 @@ public class Server
                         if (!string.IsNullOrEmpty(message.Content) && message.Content.StartsWith("/create"))
                         {
                             string[] messagesplit = message.Content.Split(' ');
-                            if (messagesplit.Length == 2 && int.TryParse(messagesplit[1].Trim(), out int roomNum))
+                            if (messagesplit.Length == 2 && !string.IsNullOrWhiteSpace(messagesplit[1]))
                             {
-                                await CreateRoom(roomNum);
-                                // var response = new Message { Sender = "Server", Content = $"Room {roomNum} created" };
-
-                                // SendToClient(client, response);
-
+                                string roomName = messagesplit[1].Trim();
+                                await CreateRoom(roomName);
                             }
-                            else 
+                            else
                             {
-                                var response = new Message { Sender = "Server", Content = "Usage: /create <roomNumber>" };
+                                var response = new Message { Sender = "Server", Content = "Usage: /create #room" };
                                 SendToClient(client, response);
                             }
                         }
                         else if (!string.IsNullOrEmpty(message.Content) && message.Content.StartsWith("/rooms"))
                         {
-                            List<int> rooms = GetRooms();
+                            List<string> rooms = GetRooms();
                             if (rooms.Count == 0)
                             {
                                 var response = new Message { Sender = "Server", Content = "No rooms" };
                                 SendToClient(client, response);
-                            } 
+                            }
                             else
                             {
                                 string roomlist = string.Join(", ", rooms);
-
                                 var response = new Message { Sender = "Server", Content = roomlist };
                                 SendToClient(client, response);
                             }
-                        } 
+                        }
                         else if (!string.IsNullOrEmpty(message.Content) && message.Content.StartsWith("/join"))
                         {
                             string[] messagesplit = message.Content.Split(' ');
-                            if (messagesplit.Length == 2 && int.TryParse(messagesplit[1].Trim(), out int roomNum))
+                            if (messagesplit.Length == 2 && !string.IsNullOrWhiteSpace(messagesplit[1]))
                             {
-                                await AddToRoom(client, roomNum);
+                                await AddToRoom(client, messagesplit[1].Trim());
                             }
                             else
                             {
-                                var response = new Message { Sender = "Server", Content = "Usage: /join <roomNumber>" };
+                                var response = new Message { Sender = "Server", Content = "Usage: /join #room" };
                                 SendToClient(client, response);
                             }
                         }
                         else if (!string.IsNullOrEmpty(message.Content) && message.Content.StartsWith("/leave"))
                         {
                             string[] messagesplit = message.Content.Split(' ');
-                            if (messagesplit.Length == 2 && int.TryParse(messagesplit[1].Trim(), out int roomNum))
+                            if (messagesplit.Length == 2 && !string.IsNullOrWhiteSpace(messagesplit[1]))
                             {
-                                await RemoveFromRoom(client, roomNum);
+                                await RemoveFromRoom(client, messagesplit[1].Trim());
                             }
                             else
                             {
-                                var response = new Message { Sender = "Server", Content = "Usage: /leave <roomNumber>" };
+                                var response = new Message { Sender = "Server", Content = "Usage: /leave #room" };
                                 SendToClient(client, response);
                             }
                         }
@@ -295,7 +291,7 @@ public class Server
                         {
                             string[] messagesplit = message.Content.Split(' ');
                             var tosend = new Message { Sender = message.Sender, Content = string.Join(" ", messagesplit[2..]) };
-                            BroadcastToRoom(tosend, int.Parse(messagesplit[1]));
+                            BroadcastToRoom(tosend, messagesplit[1]);
                         }
                         else 
                         {
@@ -354,34 +350,33 @@ public class Server
     }
 
 
-    public Task CreateRoom(int roomnum)
+    public Task CreateRoom(string roomName)
     {
         lock(_clientsLock)
         {
-            if (!_rooms.Contains(roomnum))
+            if (!_rooms.Contains(roomName))
             {
-                _rooms.Add(roomnum);
-                Console.WriteLine($"Room {roomnum} created.");
+                _rooms.Add(roomName);
+                Console.WriteLine($"Room {roomName} created.");
             }
             else
             {
-                Console.WriteLine($"Room {roomnum} already exists.");
+                Console.WriteLine($"Room {roomName} already exists.");
             }
         }
         return Task.CompletedTask;
     }
 
 
-    public List<int> GetRooms()
+    public List<string> GetRooms()
     {
         lock (_clientsLock)
         {
-            return new List<int>(_rooms);
+            return new List<string>(_rooms);
         }
-        
     }
 
-    private Task AddToRoom(TcpClient client, int roomNum)
+    private Task AddToRoom(TcpClient client, string roomName)
     {
         lock(_clientsLock)
         {
@@ -390,10 +385,10 @@ public class Server
                 Message response = new() { Sender = "Server", Content = "You are already in a room" };
                 SendToClient(client, response);
             }
-            else if (_rooms.Contains(roomNum))
+            else if (_rooms.Contains(roomName))
             {
-                _roomToClient.TryAdd(client, roomNum);
-                Message response = new() { Sender = "Server", Content = $"Successfully added to room {roomNum}" };
+                _roomToClient.TryAdd(client, roomName);
+                Message response = new() { Sender = "Server", Content = $"Successfully added to room {roomName}" };
                 SendToClient(client, response);
             }
             else
@@ -405,15 +400,15 @@ public class Server
         return Task.CompletedTask;
     }
 
-    private Task RemoveFromRoom(TcpClient client, int roomNum)
+    private Task RemoveFromRoom(TcpClient client, string roomName)
     {
         lock(_clientsLock)
         {
-            _roomToClient.TryGetValue(client, out int room);
-            if (room == roomNum)
+            _roomToClient.TryGetValue(client, out string? room);
+            if (room == roomName)
             {
                 _roomToClient.Remove(client);
-                Message response = new() { Sender = "Server", Content = $"Successfully removed from room {roomNum}" };
+                Message response = new() { Sender = "Server", Content = $"Successfully removed from room {roomName}" };
                 SendToClient(client, response);
             }
             else
@@ -485,7 +480,7 @@ public class Server
     /// <summary>
     /// Send a message to all connected clients in the given room.
     /// </summary>
-    public void BroadcastToRoom(Message message, int roomnum)
+    public void BroadcastToRoom(Message message, string roomName)
     {
         List<TcpClient> clientsCopy; // Variable to hold a copy of the _clients list
 
@@ -498,8 +493,7 @@ public class Server
         {
             TcpClient client = clientsCopy[i]; // Get the current client from the copy of the _clients list
 
-             // Get the room number of client
-            if (_roomToClient.TryGetValue(client, out int room) && room == roomnum)
+            if (_roomToClient.TryGetValue(client, out string? room) && room == roomName)
             {
                 SendToClient(client, message);
             }

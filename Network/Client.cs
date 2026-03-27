@@ -178,9 +178,9 @@ public class Client
                 {
                     if (SessionKey != null && message.EncryptedContent != null)
                     {
-                        Console.WriteLine($"[DEBUG] Encrypted bytes: {BitConverter.ToString(message.EncryptedContent)}");
+                        // Console.WriteLine($"[DEBUG] Encrypted bytes: {BitConverter.ToString(message.EncryptedContent)}");
                         message.Content = SessionKey.Decrypt(message.EncryptedContent);
-                        Console.WriteLine($"[DEBUG] Decrypted: \"{message.Content}\"");
+                        // Console.WriteLine($"[DEBUG] Decrypted: \"{message.Content}\"");
                     }
 
                     if (message.Signature != null && message.PublicKey != null) // Signature verification
@@ -246,10 +246,10 @@ public class Client
                 message.Signature = MessageSigner.SignData(data);
                 message.PublicKey = PublicKey;
 
-                Console.WriteLine($"[DEBUG] Signed message: \"{message.Content}\"");
+                // Console.WriteLine($"[DEBUG] Signed message: \"{message.Content}\"");
             }
 
-                if (SessionKey != null && !string.IsNullOrEmpty(message.Content)) // For encryption
+                if (SessionKey != null && !string.IsNullOrEmpty(message.Content) && !message.Content.StartsWith('/')) // For encryption
             {
                 message.EncryptedContent = SessionKey.Encrypt(message.Content);
                 message.Content = string.Empty;

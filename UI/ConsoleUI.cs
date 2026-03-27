@@ -194,15 +194,15 @@ public class ConsoleUI
                     commandResult.CommandType = CommandType.Rooms;
                     return commandResult;
                 case "/msg":
-                    if (inputsplit.Length != 3)
+                    if (inputsplit.Length < 3)
                     {
                         commandResult.CommandType = CommandType.Unknown;
                         return commandResult;
-                    } 
+                    }
                     else
                     {
                         commandResult.CommandType = CommandType.Message;
-                        commandResult.Args = [inputsplit[1], inputsplit[2]];
+                        commandResult.Args = [inputsplit[1], .. inputsplit[2..]];
                         return commandResult;
                     }
                 default:

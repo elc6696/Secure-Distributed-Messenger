@@ -219,7 +219,7 @@ class Program
                     }
                     else
                     {
-                        await _server.CreateRoom(int.Parse(commandResult.Args[0]));
+                        await _server.CreateRoom(commandResult.Args[0]);
                         _ui.DisplaySystem($"Room {commandResult.Args[0]} created.");
                     }
                     break;
@@ -231,8 +231,8 @@ class Program
                     }
                     else
                     {
-                        List<int> _rooms = _server.GetRooms();
-                        foreach (int room in _rooms)
+                        List<string> _rooms = _server.GetRooms();
+                        foreach (string room in _rooms)
                         {
                             Console.WriteLine(room);
                         }
