@@ -22,6 +22,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -59,6 +60,15 @@ public class Server
 
     public int Port { get; private set; }
     public bool IsListening { get; private set; }
+
+    private MessageSigner? MessageSigner { get; set; }
+    public byte[] PublicKey { get; }
+    public Server()
+    {
+        RSA rsa = RSA.Create(2048);
+        MessageSigner = new MessageSigner(rsa);
+        PublicKey = rsa.ExportSubjectPublicKeyInfo();
+    }
 
     /// <summary>
     /// Start listening for incoming connections on the specified port.
@@ -203,8 +213,24 @@ public class Server
 
                     Message? message = JsonSerializer.Deserialize<Message>(jsonString); //Deserialize JSON to Message using JsonSerializer.Deserialize
 
-                    if (message != null)
+                    if (message != null) // Decrypt if necessary and verify signature
                     {
+                        if (_clientSessionKeys.TryGetValue(client, out AesEncryption? aes) && message.EncryptedContent != null)
+                        {
+                            message.Content = aes.Decrypt(message.EncryptedContent);
+                        }
+
+                        if (message.Signature != null && message.PublicKey != null)
+                        {
+                            byte[] data = Encoding.UTF8.GetBytes(message.Content);
+
+                            if (!MessageSigner!.VerifyData(data, message.Signature, message.PublicKey))
+                            {
+                                Console.WriteLine("Invalid signature from client — message dropped.");
+                                continue;
+                            }
+                        }
+
                         // Handle commands first
                         if (!string.IsNullOrEmpty(message.Content) && message.Content.StartsWith("/create"))
                         {
@@ -300,6 +326,14 @@ public class Server
     {
         try
         {
+
+            if (!string.IsNullOrEmpty(message.Content) && MessageSigner != null) // signing before encryption
+            {
+                byte[] data = Encoding.UTF8.GetBytes(message.Content);
+                message.Signature = MessageSigner.SignData(data);
+                message.PublicKey = PublicKey;
+            }
+
             if (_clientSessionKeys.TryGetValue(client, out AesEncryption? aes) && !string.IsNullOrEmpty(message.Content))
             {
                 message.EncryptedContent = aes.Encrypt(message.Content);

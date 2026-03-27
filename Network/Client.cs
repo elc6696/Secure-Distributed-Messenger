@@ -25,6 +25,7 @@
 using System.Linq.Expressions;
 using System.Net.Sockets;
 using System.Numerics;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using SecureMessenger.Core;
@@ -55,6 +56,16 @@ public class Client
     private int _clientID;
     public AesEncryption? SessionKey{ get; set;}
     public bool IsConnected => _client?.Connected ?? false;
+
+    private MessageSigner? MessageSigner { get; set; }
+    public byte[] PublicKey { get; }
+
+    public Client()
+    {
+        RSA rsa = RSA.Create(2048);
+        MessageSigner = new MessageSigner(rsa);
+        PublicKey = rsa.ExportSubjectPublicKeyInfo();
+    }
 
     /// <summary>
     /// Connect to a server at the specified address and port.
@@ -172,6 +183,17 @@ public class Client
                         Console.WriteLine($"[DEBUG] Decrypted: \"{message.Content}\"");
                     }
 
+                    if (message.Signature != null && message.PublicKey != null) // Signature verification
+                    {
+                        byte[] data = Encoding.UTF8.GetBytes(message.Content);
+
+                        if (!MessageSigner!.VerifyData(data, message.Signature, message.PublicKey))
+                        {
+                            Console.WriteLine("Invalid signature");
+                            continue;
+                        }
+                    }
+
                     OnMessageReceived?.Invoke(message); // Invoke the OnMessageReceived event with the deserialized message
 
                 }
@@ -217,7 +239,17 @@ public class Client
 
         try
         {
-            if (SessionKey != null && !string.IsNullOrEmpty(message.Content))
+
+            if (!string.IsNullOrEmpty(message.Content) && MessageSigner != null)
+            {
+                byte[] data = Encoding.UTF8.GetBytes(message.Content);
+                message.Signature = MessageSigner.SignData(data);
+                message.PublicKey = PublicKey;
+
+                Console.WriteLine($"[DEBUG] Signed message: \"{message.Content}\"");
+            }
+
+                if (SessionKey != null && !string.IsNullOrEmpty(message.Content)) // For encryption
             {
                 message.EncryptedContent = SessionKey.Encrypt(message.Content);
                 message.Content = string.Empty;
