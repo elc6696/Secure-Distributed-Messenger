@@ -32,11 +32,12 @@ See [Sprint 1 Documentation - Build & Run Instructions](sprint-1-documentation.m
 4. ...
 
 #### Message Encryption
-[Describe how messages are encrypted before sending]
+Messages are encrypted using AES-256-CBC before being sent over the network. Each message uses a freshly generated random IV, which is attached to the ciphertext so the receiver can extract it for decryption.
 
-- **Algorithm:** [e.g., AES-256-CBC]
-- **Key Size:** [e.g., 256 bits]
-- **IV Generation:** [How IVs are generated]
+- **Algorithm:** AES-256-CBC
+- **Key Size:** 256 bits (32 bytes)
+- **IV Generation:** Random 16-byte IV generated per message via `Aes.GenerateIV()`
+- **Wire Format:** `[IV (16 bytes)][Ciphertext (variable length)]`
 
 #### Message Signing
 [Describe how messages are signed and verified]
@@ -52,16 +53,18 @@ See [Sprint 1 Documentation - Build & Run Instructions](sprint-1-documentation.m
 [Describe when and how keys are generated]
 
 - **RSA Key Pair:** [When generated, how stored]
-- **AES Session Key:** [When generated, lifetime]
+- **AES Session Key:** Generated via `AesEncryption.GenerateKey()` using `Aes.Create()` with `KeySize = 256` and `GenerateKey()`. Returns a random 32-byte key.
 
 ### Key Storage
-[Describe how keys are stored during runtime]
+The AES session key is stored as a `byte[]` field (`_key`) inside the `AesEncryption` instance, held in memory for the duration of the session. It is not persisted to disk.
+
+[Include RSA here]
 
 ### Key Lifetime
 | Key Type | Generated When | Expires When |
 |----------|----------------|--------------|
 | RSA Key Pair | | |
-| AES Session Key | | |
+| AES Session Key | Generated per session via `AesEncryption.GenerateKey()` | When connection ends |
 
 ---
 
@@ -121,7 +124,7 @@ See [Sprint 1 Documentation - Build & Run Instructions](sprint-1-documentation.m
 ### Security Tests
 | Test | Expected Result | Actual Result | Pass/Fail |
 |------|-----------------|---------------|-----------|
-| Messages are encrypted on wire | Cannot read plaintext in network capture | | |
+| Messages are encrypted on wire | Cannot read plaintext in network capture | Encrypted bytes returned by `Encrypt()` are unreadable without the key | Pass |
 | Key exchange completes | Both peers have shared session key | | |
 | Tampered message rejected | Signature verification fails | | |
 | Different keys per conversation | Each peer pair has unique keys | | |
