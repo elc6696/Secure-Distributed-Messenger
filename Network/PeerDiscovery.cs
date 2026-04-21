@@ -62,7 +62,7 @@ public class PeerDiscovery
     {
         TcpPort = tcpPort; // storing TCP port
 
-        new CancellationTokenSource().TryAddTo(ref _cancellationTokenSource); // create cancellation token source
+        _cancellationTokenSource = new CancellationTokenSource();
 
         _udpClient = new UdpClient(_broadcastPort); // create UDP client on broadcast port
         _udpClient.EnableBroadcast = true; // enable broadcast
@@ -128,19 +128,18 @@ public class PeerDiscovery
     /// </summary>
     private void ListenLoop()
     {
-
-        new IPEndPoint(IPAddress.Any, _broadcastPort); // create receive endpoint
+        IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0); // create receive endpoint
 
         while (!_cancellationTokenSource!.IsCancellationRequested)
         {
             try
             {
-                var result = _udpClient!.Receive(ref new IPEndPoint(IPAddress.Any, _broadcastPort)); // receive data
+                byte[] result = _udpClient!.Receive(ref remoteEP); // receive data
                 string message = Encoding.UTF8.GetString(result); // convert bytes to string
 
                 if (message.StartsWith("PEER:"))
                 {
-                    ProcessDiscoveryMessage(message, ((IPEndPoint)result).Address); // process discovery message
+                    ProcessDiscoveryMessage(message, remoteEP.Address); // process discovery message
                 }
             }
             catch (SocketException)
@@ -148,7 +147,6 @@ public class PeerDiscovery
                 // ignore receive errors
             }
         }
-
     }
 
     /// <summary>
@@ -185,7 +183,7 @@ public class PeerDiscovery
             return; // extract port
         }
 
-        var peer = new Peer(peerId, senderAddress, port, DateTime.UtcNow); // create Peer object
+        var peer = new Peer { Id = peerId, Address = senderAddress, Port = port, LastSeen = DateTime.UtcNow };
 
 
         if (_knownPeers.TryAdd(peerId, peer)) // try to add to known peers
