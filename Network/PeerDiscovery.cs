@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Ethan Chang
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 3: P2P & Advanced Features
@@ -60,7 +60,23 @@ public class PeerDiscovery
     /// </summary>
     public void Start(int tcpPort)
     {
-        throw new NotImplementedException("Implement Start() - see TODO in comments above");
+        TcpPort = tcpPort; // storing TCP port
+
+        new CancellationTokenSource().TryAddTo(ref _cancellationTokenSource); // create cancellation token source
+
+        _udpClient = new UdpClient(_broadcastPort); // create UDP client on broadcast port
+        _udpClient.EnableBroadcast = true; // enable broadcast
+
+        _listenThread = new Thread(ListenLoop);
+        _listenThread.Start(); // start listen thread
+
+        _broadcastThread = new Thread(BroadcastLoop);
+        _broadcastThread.Start(); // start broadcast thread
+
+        Task.Run(TimeoutCheckLoop); // start timeout check loop
+
+
+
     }
 
     /// <summary>
@@ -77,7 +93,26 @@ public class PeerDiscovery
     /// </summary>
     private void BroadcastLoop()
     {
-        throw new NotImplementedException("Implement BroadcastLoop() - see TODO in comments above");
+
+        new IPEndPoint(IPAddress.Broadcast, _broadcastPort); // create broadcast endpoint
+
+        while (!_cancellationTokenSource!.IsCancellationRequested)
+        {
+            string message = $"PEER:{LocalPeerId}:{TcpPort}"; // create discovery message
+            byte[] data = Encoding.UTF8.GetBytes(message); // convert to bytes
+
+            try
+            {
+                _udpClient!.Send(data, data.Length, new IPEndPoint(IPAddress.Broadcast, _broadcastPort)); // send via UDP client
+            }
+            catch (SocketException)
+            {
+                // ignore broadcast errors
+            }
+
+            Thread.Sleep(5000); // sleep for 5 seconds between broadcasts
+        }
+
     }
 
     /// <summary>
@@ -93,7 +128,27 @@ public class PeerDiscovery
     /// </summary>
     private void ListenLoop()
     {
-        throw new NotImplementedException("Implement ListenLoop() - see TODO in comments above");
+
+        new IPEndPoint(IPAddress.Any, _broadcastPort); // create receive endpoint
+
+        while (!_cancellationTokenSource!.IsCancellationRequested)
+        {
+            try
+            {
+                var result = _udpClient!.Receive(ref new IPEndPoint(IPAddress.Any, _broadcastPort)); // receive data
+                string message = Encoding.UTF8.GetString(result); // convert bytes to string
+
+                if (message.StartsWith("PEER:"))
+                {
+                    ProcessDiscoveryMessage(message, ((IPEndPoint)result).Address); // process discovery message
+                }
+            }
+            catch (SocketException)
+            {
+                // ignore receive errors
+            }
+        }
+
     }
 
     /// <summary>
@@ -111,7 +166,38 @@ public class PeerDiscovery
     /// </summary>
     private void ProcessDiscoveryMessage(string message, IPAddress senderAddress)
     {
-        throw new NotImplementedException("Implement ProcessDiscoveryMessage() - see TODO in comments above");
+        var parts = message.Split(':'); // split message by ':'
+
+        if (parts.Length < 3) 
+        {
+            return; // validate we have at least 3 parts
+        }
+
+        string peerId = parts[1]; // extract peerId
+
+        if (peerId == LocalPeerId) 
+        {
+            return; // ignore ourselves
+        }
+
+        if (!int.TryParse(parts[2], out int port)) 
+        {
+            return; // extract port
+        }
+
+        var peer = new Peer(peerId, senderAddress, port, DateTime.UtcNow); // create Peer object
+
+
+        if (_knownPeers.TryAdd(peerId, peer)) // try to add to known peers
+        {
+            OnPeerDiscovered?.Invoke(peer); // invoke OnPeerDiscovered if new peer
+        }
+        else
+        {
+            _knownPeers[peerId].LastSeen = DateTime.UtcNow; // update LastSeen timestamp for existing peer
+        }
+
+
     }
 
     /// <summary>
@@ -129,7 +215,26 @@ public class PeerDiscovery
     /// </summary>
     private async Task TimeoutCheckLoop()
     {
-        throw new NotImplementedException("Implement TimeoutCheckLoop() - see TODO in comments above");
+
+        while (!_cancellationTokenSource!.IsCancellationRequested)
+        {
+            TimeSpan timeout = TimeSpan.FromSeconds(30); // define timeout
+            DateTime now = DateTime.UtcNow; // get current time
+
+            foreach (var peer in _knownPeers.Values.ToList()) // iterate through known peers
+            {
+                if (now - peer.LastSeen > timeout) // check for timeout
+                {
+                    if (_knownPeers.TryRemove(peer.Id, out _)) // remove from known peers
+                    {
+                        OnPeerLost?.Invoke(peer); // invoke OnPeerLost
+                    }
+                }
+            }
+
+            await Task.Delay(5000); // delay 5 seconds between checks
+        }
+
     }
 
     /// <summary>
@@ -137,7 +242,9 @@ public class PeerDiscovery
     /// </summary>
     public IEnumerable<Peer> GetKnownPeers()
     {
+
         return _knownPeers.Values.ToList();
+
     }
 
     /// <summary>
@@ -150,6 +257,12 @@ public class PeerDiscovery
     /// </summary>
     public void Stop()
     {
-        throw new NotImplementedException("Implement Stop() - see TODO in comments above");
+
+        _cancellationTokenSource?.Cancel(); // cancel the cancellation token
+        _udpClient?.Close(); // close the UDP client
+
+        _listenThread?.Join(1000); // wait for listen thread to finish
+        _broadcastThread?.Join(1000); // wait for broadcast thread to finish
+
     }
 }

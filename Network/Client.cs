@@ -249,7 +249,7 @@ public class Client
                 // Console.WriteLine($"[DEBUG] Signed message: \"{message.Content}\"");
             }
 
-                if (SessionKey != null && !string.IsNullOrEmpty(message.Content) && !message.Content.StartsWith('/')) // For encryption
+            if (SessionKey != null && !string.IsNullOrEmpty(message.Content) && !message.Content.StartsWith('/')) // For encryption
             {
                 message.EncryptedContent = SessionKey.Encrypt(message.Content);
                 message.Content = string.Empty;
