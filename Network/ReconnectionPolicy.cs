@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Ethan Chang
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 3: P2P & Advanced Features
@@ -16,6 +16,7 @@
 //
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using SecureMessenger.Core;
 
 namespace SecureMessenger.Network;
@@ -80,7 +81,36 @@ public class ReconnectionPolicy
     /// </summary>
     public async Task<bool> TryReconnect(Peer peer)
     {
-        throw new NotImplementedException("Implement TryReconnect() - see TODO in comments above");
+        _attemptCount.TryGetValue(peer.Id, out var attempt);
+
+        while (attempt < MaxAttempts) {
+
+            attempt++;
+            _attemptCount[peer.Id] = attempt;
+
+            Debug.WriteLine($"[ReconnectionPolicy] Attempting to reconnect to {peer.Id} (Attempt {attempt}/{MaxAttempts})");
+            OnReconnectAttempt?.Invoke(peer.Id, attempt);
+
+            int delay = Math.Min(InitialDelayMs * (1 << (attempt - 1)), MaxDelayMs);
+
+            bool success = await _client.ConnectAsync(peer.Address!.ToString(), peer.Port);
+            if (success)
+            {
+                Debug.WriteLine($"[ReconnectionPolicy] Successfully reconnected to {peer.Id} on attempt {attempt}");
+                ResetAttempts(peer.Id);
+                OnReconnectSuccess?.Invoke(peer.Id);
+                return true;
+            }
+            else
+            {
+                Debug.WriteLine($"[ReconnectionPolicy] Failed attempt {attempt} for {peer.Id}");
+                await Task.Delay(delay);
+            }
+        }
+
+        Debug.WriteLine($"[ReconnectionPolicy] Gave up reconnecting to {peer.Id} after {MaxAttempts} attempts");
+        OnReconnectFailed?.Invoke(peer.Id);
+        return false;
     }
 
     /// <summary>
@@ -92,7 +122,7 @@ public class ReconnectionPolicy
     /// </summary>
     public void ResetAttempts(string peerId)
     {
-        throw new NotImplementedException("Implement ResetAttempts() - see TODO in comments above");
+        _attemptCount.TryRemove(peerId, out _);
     }
 
     /// <summary>
@@ -104,6 +134,7 @@ public class ReconnectionPolicy
     /// </summary>
     public int GetAttemptCount(string peerId)
     {
-        throw new NotImplementedException("Implement GetAttemptCount() - see TODO in comments above");
+        _attemptCount.TryGetValue(peerId, out var count);
+        return count;
     }
 }
