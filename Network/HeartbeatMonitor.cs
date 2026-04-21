@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Ethan Chang
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 3: P2P & Advanced Features
@@ -54,7 +54,9 @@ public class HeartbeatMonitor
     /// </summary>
     public void Start()
     {
-        throw new NotImplementedException("Implement Start() - see TODO in comments above");
+        _cancellationTokenSource = new CancellationTokenSource();
+        _ = MonitorLoop();
+
     }
 
     /// <summary>
@@ -66,7 +68,7 @@ public class HeartbeatMonitor
     /// </summary>
     public void StartMonitoring(string peerId)
     {
-        throw new NotImplementedException("Implement StartMonitoring() - see TODO in comments above");
+        _lastHeartbeat[peerId] = DateTime.UtcNow;
     }
 
     /// <summary>
@@ -79,7 +81,9 @@ public class HeartbeatMonitor
     /// </summary>
     public void RecordHeartbeat(string peerId)
     {
-        throw new NotImplementedException("Implement RecordHeartbeat() - see TODO in comments above");
+        _lastHeartbeat[peerId] = DateTime.UtcNow;
+        OnHeartbeatReceived?.Invoke(peerId);
+
     }
 
     /// <summary>
@@ -91,7 +95,7 @@ public class HeartbeatMonitor
     /// </summary>
     public void StopMonitoring(string peerId)
     {
-        throw new NotImplementedException("Implement StopMonitoring() - see TODO in comments above");
+        _lastHeartbeat.TryRemove(peerId, out _);
     }
 
     /// <summary>
@@ -110,7 +114,24 @@ public class HeartbeatMonitor
     /// </summary>
     private async Task MonitorLoop()
     {
-        throw new NotImplementedException("Implement MonitorLoop() - see TODO in comments above");
+        while (_cancellationTokenSource != null && !_cancellationTokenSource.Token.IsCancellationRequested)
+        {
+            var now = DateTime.UtcNow;
+            foreach (var kvp in _lastHeartbeat)
+            {
+                var peerId = kvp.Key;
+                var lastSeen = kvp.Value;
+                var elapsed = now - lastSeen;
+                if (elapsed > _timeout)
+                {
+                    Debug.WriteLine($"[HeartbeatMonitor] Peer {peerId} timed out (last seen {elapsed.TotalSeconds:F1} seconds ago)");
+                    OnConnectionFailed?.Invoke(peerId);
+                    StopMonitoring(peerId);
+                }
+            }
+            await Task.Delay(1000);
+        }
+
     }
 
     /// <summary>
@@ -123,7 +144,12 @@ public class HeartbeatMonitor
     /// </summary>
     public bool IsAlive(string peerId)
     {
-        throw new NotImplementedException("Implement IsAlive() - see TODO in comments above");
+        if (_lastHeartbeat.TryGetValue(peerId, out var lastSeen))
+        {
+            return DateTime.UtcNow - lastSeen < _timeout;
+        }
+        return false;
+        
     }
 
     /// <summary>
@@ -134,6 +160,6 @@ public class HeartbeatMonitor
     /// </summary>
     public void Stop()
     {
-        throw new NotImplementedException("Implement Stop() - see TODO in comments above");
+        _cancellationTokenSource?.Cancel();
     }
 }
