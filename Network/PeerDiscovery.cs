@@ -94,7 +94,7 @@ public class PeerDiscovery
     private void BroadcastLoop()
     {
 
-        new IPEndPoint(IPAddress.Broadcast, _broadcastPort); // create broadcast endpoint
+        IPEndPoint broadcastEndpoint = new(IPAddress.Broadcast, _broadcastPort); // create broadcast endpoint
 
         while (!_cancellationTokenSource!.IsCancellationRequested)
         {
@@ -103,7 +103,7 @@ public class PeerDiscovery
 
             try
             {
-                _udpClient!.Send(data, data.Length, new IPEndPoint(IPAddress.Broadcast, _broadcastPort)); // send via UDP client
+                _udpClient!.Send(data, data.Length, broadcastEndpoint); // send via UDP client
             }
             catch (SocketException)
             {
