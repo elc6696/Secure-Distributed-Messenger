@@ -22,6 +22,8 @@
 
 using System.Net;
 using System.Net.Sockets;
+using SecureMessenger.Network;
+using SecureMessenger.Security;
 
 namespace SecureMessenger.Core;
 
@@ -70,10 +72,15 @@ public class Peer
     // These are negotiated during the key exchange handshake
     public byte[]? AesKey { get; set; }
     public byte[]? PublicKey { get; set; }
+    public AesEncryption? SessionAes { get; set; }
 
     // Sprint 3: Reconnection tracking
     public int ReconnectAttempts { get; set; }
     public DateTime? LastReconnectAttempt { get; set; }
+
+    public Client? Outbound { get; set; }
+    public KeyExchange? KeyExchange { get; set; }
+    public ReconnectionPolicy? ReconnectPolicy { get; set; }
 
     public override string ToString()
     {

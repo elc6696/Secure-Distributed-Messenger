@@ -9,6 +9,7 @@
 
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.Serialization;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.VisualBasic;
@@ -74,11 +75,7 @@ class Program
     private static HeartbeatMonitor _heartbeatMonitor = new();
     private static MessageHistory _history = new();
 
-    // P2P: one outbound Client per remote peer
-    private static ConcurrentDictionary<string, Client> _peerClients = new();
-    private static ConcurrentDictionary<string, Peer> _activePeers = new();
-    private static ConcurrentDictionary<string, KeyExchange> _peerKeyExchanges = new();
-    private static ConcurrentDictionary<string, ReconnectionPolicy> _reconnectPolicies = new();
+    private static ConcurrentDictionary<string, Peer> _peers = new();
 
     static async Task Main(string[] args)
     {
@@ -96,7 +93,6 @@ class Program
                 _heartbeatMonitor.RecordHeartbeat(message.Sender);
                 return;
             }
-            _server?.Broadcast(message);
             if (message.Type == MessageType.Text)
                 _queue.EnqueueIncoming(message);
         };
@@ -133,13 +129,13 @@ class Program
             }
         };
 
-        _server.OnClientConnected += endpoint => _ui?.DisplaySystem($"Peer connected from {endpoint}");
-        _server.OnClientDisconnected += endpoint => _ui?.DisplaySystem($"Peer disconnected: {endpoint}");
+        _server.OnPeerConnected += peer => _ui?.DisplaySystem($"Peer connected from {peer.Address}:{peer.Port}");
+        _server.OnPeerDisconnected += peer => _ui?.DisplaySystem($"Peer disconnected: {peer.Address}:{peer.Port}");
 
         _peerDiscovery.OnPeerDiscovered += async peer =>
         {
             _ui?.DisplaySystem($"Peer discovered: {peer.Id} at {peer.Address}:{peer.Port}");
-            if (!_peerClients.ContainsKey(peer.Id) &&
+            if (!_peers.ContainsKey(peer.Id) &&
                 string.Compare(_peerDiscovery.LocalPeerId, peer.Id, StringComparison.Ordinal) < 0)
                 await ConnectToPeer(peer);
         };
@@ -147,14 +143,21 @@ class Program
         {
             _ui?.DisplaySystem($"Peer {peer.Id} lost (30s with no broadcast)");
             _heartbeatMonitor.StopMonitoring(peer.Id);
-            if (_peerClients.TryRemove(peer.Id, out var lostClient)) lostClient.Disconnect();
-            _activePeers.TryRemove(peer.Id, out _);
+            if (_peers.TryRemove(peer.Id, out var removed))
+            {
+                removed.Outbound?.Disconnect();
+                removed.Dispose();
+            }
         };
 
-        _heartbeatMonitor.OnConnectionFailed += HandlePeerConnectionFailed;
+        _heartbeatMonitor.OnConnectionFailed += peerId =>
+        {
+            if (_peers.TryGetValue(peerId, out var failedPeer)) HandlePeerConnectionFailed(failedPeer);
+        };
         _heartbeatMonitor.OnHeartbeatReceived += peerId =>
         {
-            if (_reconnectPolicies.TryGetValue(peerId, out var p)) p.ResetAttempts(peerId);
+            if (_peers.TryGetValue(peerId, out var p) && p.ReconnectPolicy != null)
+                p.ReconnectPolicy.ResetAttempts(peerId);
         };
 
         Console.WriteLine("Type /help for available commands");
@@ -184,9 +187,6 @@ class Program
                 {
                     Message message = _queue.DequeueOutgoing(_cts.Token);
                     _server?.Broadcast(message);
-                    if (_client?.IsConnected == true) {
-                        _client?.Send(message);
-                    }
                 }
             } catch (OperationCanceledException) {}
         });
@@ -201,8 +201,9 @@ class Program
                 while (!_cts.Token.IsCancellationRequested)
                 {
                     var hb = new Message { Type = MessageType.Heartbeat, Sender = _peerDiscovery.LocalPeerId };
-                    foreach (var kvp in _peerClients)
-                        try { kvp.Value.Send(hb); } catch { }
+                    foreach (var peer in _peers.Values)
+                        try { peer.Outbound?.Send(hb); } catch { }
+                    try { _server?.Broadcast(hb); } catch { }
                     await Task.Delay((int)_heartbeatMonitor.HeartbeatInterval.TotalMilliseconds, _cts.Token);
                 }
             }
@@ -224,10 +225,16 @@ class Program
             switch(commandResult.CommandType)
             {
                 case CommandType.Connect:
+                    string targetIp;
+                    int targetPort;
                     if(commandResult.Args[0] == "local") {
-                        await _client.ConnectAsync("127.0.0.1", 5001);
+                        targetIp = "127.0.0.1";
+                        targetPort = 5001;
+                        await _client.ConnectAsync(targetIp, targetPort);
                     }else {
-                        await _client.ConnectAsync(commandResult.Args[0], int.Parse(commandResult.Args[1]));
+                        targetIp = commandResult.Args[0];
+                        targetPort = int.Parse(commandResult.Args[1]);
+                        await _client.ConnectAsync(targetIp, targetPort);
                     }
                     _client.setClientID(Random.Shared.Next(1, 1000)); // Assign a random client ID for demonstration
                     // Sprint 2 Addition with Key Exchange:
@@ -240,34 +247,59 @@ class Program
                         PublicKey = _myPublicKey
                     };
                     _client.Send(publicKeyMessage);
+                    if (_client.IsConnected)
+                    {
+                        var connected = new Peer
+                        {
+                            Address = IPAddress.TryParse(targetIp, out var parsed) ? parsed : IPAddress.None,
+                            Port = targetPort,
+                            Outbound = _client,
+                            KeyExchange = _keyExchange,
+                            IsConnected = true,
+                        };
+                        _peers[connected.Id] = connected;
+                        _heartbeatMonitor.StartMonitoring(connected.Id);
+                        _ui?.DisplaySystem($"Manually connected as peer {connected.Id}");
+                    }
                     break;
                 case CommandType.Listen:
                     int listenPort = commandResult.Args[0] == "local" ? 5001 : int.Parse(commandResult.Args[0]);
                     await _server.Start(listenPort);
-                    _peerDiscovery.Start(listenPort);
+                    try
+                    {
+                        _peerDiscovery.Start(listenPort);
+                        _ui?.DisplaySystem($"Listening on port {listenPort}, peer discovery active");
+                    }
+                    catch (SocketException ex)
+                    {
+                        _ui?.DisplaySystem($"Listening on port {listenPort}. Peer discovery disabled on this instance ({ex.Message}). Use /connect to populate peers manually.");
+                    }
                     _heartbeatMonitor.Start();
-                    _ui?.DisplaySystem($"Listening on port {listenPort}, peer discovery active");
                     break;
                 case CommandType.Quit:
                     _peerDiscovery.Stop();
                     _heartbeatMonitor.Stop();
-                    foreach (var c in _peerClients.Values) c.Disconnect();
+                    foreach (var p in _peers.Values) p.Outbound?.Disconnect();
                     running = false;
                     break;
                 case CommandType.Peers:
                     var knownPeers = _peerDiscovery.GetKnownPeers().ToList();
-                    if (knownPeers.Count == 0)
+                    var allPeerIds = knownPeers.Select(p => p.Id).Concat(_peers.Keys).Distinct().ToList();
+                    if (allPeerIds.Count == 0)
                     {
                         _ui?.DisplaySystem("No peers discovered yet.");
                         break;
                     }
-                    Console.WriteLine($"--- Known Peers ({knownPeers.Count}) ---");
-                    foreach (var p in knownPeers)
+                    Console.WriteLine($"--- Known Peers ({allPeerIds.Count}) ---");
+                    foreach (var id in allPeerIds)
                     {
-                        bool connected = _peerClients.ContainsKey(p.Id);
-                        bool alive = connected && _heartbeatMonitor.IsAlive(p.Id);
+                        var discovered = knownPeers.FirstOrDefault(p => p.Id == id);
+                        _peers.TryGetValue(id, out var tracked);
+                        var effective = tracked ?? discovered!;
+                        bool connected = tracked?.Outbound != null;
+                        bool alive = connected && _heartbeatMonitor.IsAlive(id);
                         string status = connected ? (alive ? "Connected" : "Degraded") : "Discovered";
-                        Console.WriteLine($"  {p.Id} @ {p.Address}:{p.Port} [{status}] last seen {p.LastSeen:HH:mm:ss}");
+                        Console.WriteLine($"  {effective.Id} @ {effective.Address}:{effective.Port} [{status}] last seen {effective.LastSeen:HH:mm:ss}");
                     }
                     Console.WriteLine("--- End of Peers ---");
                     break;
@@ -329,8 +361,8 @@ class Program
                     if (msgTarget.StartsWith('@'))
                     {
                         string targetPeerId = msgTarget[1..];
-                        if (_peerClients.TryGetValue(targetPeerId, out Client? targetClient))
-                            targetClient.Send(new Message { Sender = _username, Content = msgContent, TargetPeerId = targetPeerId });
+                        if (_peers.TryGetValue(targetPeerId, out Peer? targetPeer) && targetPeer.Outbound != null)
+                            targetPeer.Outbound.Send(new Message { Sender = _username, Content = msgContent, TargetPeerId = targetPeerId });
                         else
                             _ui?.DisplaySystem($"Peer '{targetPeerId}' not connected. Use /peers to see available peers.");
                     }
@@ -341,11 +373,10 @@ class Program
                     }
                     break;
                 default:
-                    // Only send if connected to a server; otherwise this node is a pure relay
-                    if (_client?.IsConnected == true)
                     {
-                        var msg = new Message { Sender = _username + await _client.getClientID(), Content = commandResult.Message! };
+                        var msg = new Message { Sender = _username + (_client?.IsConnected == true ? await _client.getClientID() : 0), Content = commandResult.Message! };
                         _queue.EnqueueOutgoing(msg);
+                        _queue.EnqueueIncoming(msg);
                         await BroadcastToAllPeersParallel(msg);
                     }
                     break;
@@ -362,35 +393,33 @@ class Program
         Console.WriteLine("Goodbye!");
     }
 
-    private static void HandlePeerConnectionFailed(string peerId)
+    private static void HandlePeerConnectionFailed(Peer peer)
     {
-        _ui?.DisplaySystem($"Peer {peerId} lost connection — reconnecting");
-        _heartbeatMonitor.StopMonitoring(peerId);
-        if (_activePeers.TryGetValue(peerId, out Peer? peer))
-        {
-            var freshClient = new Client();
-            WireClientEvents(freshClient, peerId);
-            var policy = new ReconnectionPolicy(freshClient);
-            WireReconnectEvents(policy, peerId);
-            _reconnectPolicies[peerId] = policy;
-            _ = Task.Run(() => policy.TryReconnect(peer));
-        }
+        _ui?.DisplaySystem($"Peer {peer.Id} lost connection — reconnecting");
+        _heartbeatMonitor.StopMonitoring(peer.Id);
+        var freshClient = new Client();
+        peer.Outbound = freshClient;
+        WireClientEvents(peer);
+        var policy = new ReconnectionPolicy(freshClient);
+        peer.ReconnectPolicy = policy;
+        WireReconnectEvents(policy, peer.Id);
+        _ = Task.Run(() => policy.TryReconnect(peer));
     }
 
     private static async Task ConnectToPeer(Peer peer)
     {
         var client = new Client();
-        WireClientEvents(client, peer.Id);
+        peer.Outbound = client;
+        WireClientEvents(peer);
         bool ok = await client.ConnectAsync(peer.Address!.ToString(), peer.Port);
         if (!ok) return;
 
-        _peerClients[peer.Id] = client;
-        _activePeers[peer.Id] = peer;
         peer.IsConnected = true;
+        _peers[peer.Id] = peer;
         _heartbeatMonitor.StartMonitoring(peer.Id);
 
         var kx = new KeyExchange();
-        _peerKeyExchanges[peer.Id] = kx;
+        peer.KeyExchange = kx;
         client.Send(new Message
         {
             Type = MessageType.KeyExchange,
@@ -399,36 +428,39 @@ class Program
         });
 
         var policy = new ReconnectionPolicy(client);
+        peer.ReconnectPolicy = policy;
         WireReconnectEvents(policy, peer.Id);
-        _reconnectPolicies[peer.Id] = policy;
         _ui?.DisplaySystem($"Connected to peer {peer.Id}");
     }
 
-    private static void WireClientEvents(Client client, string peerId)
+    private static void WireClientEvents(Peer peer)
     {
+        Client client = peer.Outbound!;
         client.OnMessageReceived += message =>
         {
             if (message.Type == MessageType.Heartbeat)
             {
-                _heartbeatMonitor.RecordHeartbeat(peerId);
+                _heartbeatMonitor.RecordHeartbeat(peer.Id);
             }
             else if (message.Type == MessageType.KeyExchange && message.PublicKey != null
-                && _peerKeyExchanges.TryGetValue(peerId, out KeyExchange? kx))
+                && peer.KeyExchange != null)
             {
+                KeyExchange kx = peer.KeyExchange;
                 kx.ReceivePublicKey(message.PublicKey);
                 byte[] encryptedKey = kx.CreateEncryptedSessionKey();
                 client.Send(new Message { Type = MessageType.SessionKey, Sender = _peerDiscovery.LocalPeerId, PublicKey = encryptedKey });
                 kx.Complete();
                 client.SessionKey = new AesEncryption(kx.SessionKey!);
-                _ui?.DisplaySystem($"Key exchange complete with peer {peerId}");
+                _ui?.DisplaySystem($"Key exchange complete with peer {peer.Id}");
             }
             else if (message.Type == MessageType.SessionKey && message.PublicKey != null
-                && _peerKeyExchanges.TryGetValue(peerId, out KeyExchange? kx2)
-                && !kx2.IsEstablished)
+                && peer.KeyExchange != null
+                && !peer.KeyExchange.IsEstablished)
             {
+                KeyExchange kx2 = peer.KeyExchange;
                 kx2.ReceiveEncryptedSessionKey(message.PublicKey);
                 client.SessionKey = new AesEncryption(kx2.SessionKey!);
-                _ui?.DisplaySystem($"Session key established with peer {peerId}");
+                _ui?.DisplaySystem($"Session key established with peer {peer.Id}");
             }
             else if (message.Type == MessageType.Text)
             {
@@ -436,7 +468,7 @@ class Program
             }
         };
 
-        client.OnDisconnected += _ => HandlePeerConnectionFailed(peerId);
+        client.OnDisconnected += _ => HandlePeerConnectionFailed(peer);
     }
 
     private static void WireReconnectEvents(ReconnectionPolicy policy, string peerId)
@@ -451,14 +483,13 @@ class Program
         policy.OnReconnectFailed += id =>
         {
             _ui?.DisplaySystem($"Gave up reconnecting to {id} after 5 attempts");
-            _peerClients.TryRemove(id, out _);
-            _activePeers.TryRemove(id, out _);
+            _peers.TryRemove(id, out _);
         };
     }
 
     private static async Task BroadcastToAllPeersParallel(Message msg)
     {
-        var snapshot = _peerClients.Values.ToList();
+        var snapshot = _peers.Values.Select(p => p.Outbound).Where(c => c != null).Cast<Client>().ToList();
         if (snapshot.Count == 0) return;
         // TPL: parallel AES encryption + network send to each connected peer
         await Task.WhenAll(snapshot.Select(c => Task.Run(() => c.Send(msg))));

@@ -23,6 +23,7 @@
 //
 
 using System.Linq.Expressions;
+using System.Net;
 using System.Net.Sockets;
 using System.Numerics;
 using System.Security.Cryptography;
@@ -49,13 +50,14 @@ public class Client
     private CancellationTokenSource? _cancellationTokenSource;
     private string _serverEndpoint = "";
 
-    public event Action<string>? OnConnected;
-    public event Action<string>? OnDisconnected;
+    public event Action<Peer>? OnConnected;
+    public event Action<Peer>? OnDisconnected;
     public event Action<Message>? OnMessageReceived;
 
     private int _clientID;
     public AesEncryption? SessionKey{ get; set;}
     public bool IsConnected => _client?.Connected ?? false;
+    public Peer? RemotePeer { get; private set; }
 
     private MessageSigner? MessageSigner { get; set; }
     public byte[] PublicKey { get; }
@@ -95,7 +97,15 @@ public class Client
             await _client.ConnectAsync(host, port, _cancellationTokenSource.Token); // Asynchronously connect to the specified host and port
             _stream = _client.GetStream(); // Get the NetworkStream from the client
             _serverEndpoint = $"{host}:{port}"; // Store the endpoint string (e.g
-            OnConnected?.Invoke(_serverEndpoint); // Invoke the OnConnected event with the server endpoint
+            RemotePeer = new Peer
+            {
+                Address = IPAddress.TryParse(host, out var ip) ? ip : IPAddress.None,
+                Port = port,
+                Client = _client,
+                Stream = _stream,
+                IsConnected = true,
+            };
+            OnConnected?.Invoke(RemotePeer);
             _ = Task.Run(ReceiveAsync); // Start the ReceiveAsync method on a background Task
             return true; // Return true on successful connection
         }
@@ -209,7 +219,11 @@ public class Client
         }
         finally
         {
-            OnDisconnected?.Invoke(_serverEndpoint); // Invoke the OnDisconnected event with the server endpoint
+            if (RemotePeer != null)
+            {
+                RemotePeer.IsConnected = false;
+                OnDisconnected?.Invoke(RemotePeer);
+            }
         }
     }
 
