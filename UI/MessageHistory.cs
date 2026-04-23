@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Donald Tsang
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 3: P2P & Advanced Features
@@ -27,7 +27,8 @@ public class MessageHistory
 {
     private readonly string _historyFile;
     private readonly List<Message> _messages = new();
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
+    private static readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 
     /// <summary>
     /// Create a MessageHistory with optional custom file path.
@@ -39,7 +40,8 @@ public class MessageHistory
     /// </summary>
     public MessageHistory(string historyFile = "message_history.json")
     {
-        throw new NotImplementedException("Implement constructor - see TODO in comments above");
+        _historyFile = historyFile;
+        Load();
     }
 
     /// <summary>
@@ -52,7 +54,11 @@ public class MessageHistory
     /// </summary>
     public void SaveMessage(Message message)
     {
-        throw new NotImplementedException("Implement SaveMessage() - see TODO in comments above");
+        lock (_lock)
+        {
+            _messages.Add(message);
+            PersistToFile();
+        }
     }
 
     /// <summary>
@@ -72,7 +78,25 @@ public class MessageHistory
     /// </summary>
     public void Load()
     {
-        throw new NotImplementedException("Implement Load() - see TODO in comments above");
+        try
+        {
+            if (!File.Exists(_historyFile)) return;
+
+            string json = File.ReadAllText(_historyFile);
+            var loaded = JsonSerializer.Deserialize<List<Message>>(json);
+            if (loaded != null)
+            {
+                lock (_lock)
+                {
+                    _messages.Clear();
+                    _messages.AddRange(loaded);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[System] Failed to load message history: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -89,11 +113,19 @@ public class MessageHistory
     /// </summary>
     private void PersistToFile()
     {
-        throw new NotImplementedException("Implement PersistToFile() - see TODO in comments above");
+        try
+        {
+            string json = JsonSerializer.Serialize(_messages, _jsonOptions);
+            File.WriteAllText(_historyFile, json);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[System] Failed to save message history: {ex.Message}");
+        }
     }
 
     /// <summary>
-    /// Get messages from history.
+    /// Get messages from history, newest first, with optional count limit.
     ///
     /// TODO: Implement the following:
     /// 1. Lock on _lock for thread safety
@@ -105,11 +137,15 @@ public class MessageHistory
     /// </summary>
     public IEnumerable<Message> GetHistory(int? limit = null)
     {
-        throw new NotImplementedException("Implement GetHistory() - see TODO in comments above");
+        lock (_lock)
+        {
+            var ordered = _messages.OrderByDescending(m => m.Timestamp);
+            return (limit.HasValue ? ordered.Take(limit.Value) : ordered).ToList();
+        }
     }
 
     /// <summary>
-    /// Display history to console.
+    /// Display history to console, oldest first.
     ///
     /// TODO: Implement the following:
     /// 1. Print a header: "--- Message History (last N messages) ---"
@@ -120,7 +156,11 @@ public class MessageHistory
     /// </summary>
     public void ShowHistory(int limit = 50)
     {
-        throw new NotImplementedException("Implement ShowHistory() - see TODO in comments above");
+        Console.WriteLine($"--- Message History (last {limit} messages) ---");
+        var messages = GetHistory(limit).Reverse();
+        foreach (var message in messages)
+            Console.WriteLine(message.ToString());
+        Console.WriteLine("--- End of History ---");
     }
 
     /// <summary>
@@ -133,6 +173,11 @@ public class MessageHistory
     /// </summary>
     public void Clear()
     {
-        throw new NotImplementedException("Implement Clear() - see TODO in comments above");
+        lock (_lock)
+        {
+            _messages.Clear();
+            if (File.Exists(_historyFile))
+                File.Delete(_historyFile);
+        }
     }
 }
