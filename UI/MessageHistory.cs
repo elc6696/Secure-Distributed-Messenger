@@ -82,7 +82,12 @@ public class MessageHistory
         {
             if (!File.Exists(_historyFile)) return;
 
-            string json = File.ReadAllText(_historyFile);
+            string json;
+            using (var fs = new FileStream(_historyFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var reader = new StreamReader(fs))
+            {
+                json = reader.ReadToEnd();
+            }
             var loaded = JsonSerializer.Deserialize<List<Message>>(json);
             if (loaded != null)
             {
@@ -113,15 +118,31 @@ public class MessageHistory
     /// </summary>
     private void PersistToFile()
     {
-        try
+        string json = JsonSerializer.Serialize(_messages, _jsonOptions);
+        Exception? lastError = null;
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            string json = JsonSerializer.Serialize(_messages, _jsonOptions);
-            File.WriteAllText(_historyFile, json);
+            try
+            {
+                using var fs = new FileStream(_historyFile, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+                using var writer = new StreamWriter(fs);
+                writer.Write(json);
+                writer.Flush();
+                return;
+            }
+            catch (IOException ex)
+            {
+                lastError = ex;
+                Thread.Sleep(50);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[System] Failed to save message history: {ex.Message}");
+                return;
+            }
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[System] Failed to save message history: {ex.Message}");
-        }
+        if (lastError != null)
+            Console.WriteLine($"[System] Failed to save message history: {lastError.Message}");
     }
 
     /// <summary>
