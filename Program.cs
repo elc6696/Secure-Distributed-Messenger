@@ -77,6 +77,9 @@ class Program
 
     private static ConcurrentDictionary<string, Peer> _peers = new();
 
+    private static ConcurrentDictionary<string, HashSet<string>> _roomMembers = new();
+    private static HashSet<string> _myRooms = new();
+
     static async Task Main(string[] args)
     {
         Console.WriteLine("Secure Distributed Messenger");
@@ -94,51 +97,40 @@ class Program
                 return;
             }
             if (message.Type == MessageType.Text)
+            {
                 _queue.EnqueueIncoming(message);
+            }
+            if (message.Type == MessageType.RoomJoin && message.Room != null)
+            {
+                var members = _roomMembers.GetOrAdd(message.Room, _ => new HashSet<string>());
+                lock (members) members.Add(message.Sender);
+                _ui?.DisplaySystem($"{message.Sender} joined room #{message.Room}");
+                return;
+            }
+            if (message.Type == MessageType.RoomLeave && message.Room != null)
+            {
+                if (_roomMembers.TryGetValue(message.Room, out var members))
+                    lock (members) members.Remove(message.Sender);
+                _ui?.DisplaySystem($"{message.Sender} left room #{message.Room}");
+                return;
+            }
+            if (message.Type == MessageType.RoomMessage && message.Room != null)
+            {
+                if (_myRooms.Contains(message.Room))
+                    _queue.EnqueueIncoming(message);
+                return;
+            }
         };
 
         _client.OnMessageReceived += message =>
         {
-            if (message.Type == MessageType.KeyExchange && message.PublicKey != null
-                && !message.PublicKey.SequenceEqual(_myPublicKey ?? Array.Empty<byte>()))
-            {
-                _keyExchange.ReceivePublicKey(message.PublicKey);
-                byte[] encryptedKey = _keyExchange.CreateEncryptedSessionKey();
-                var sessionMessage = new Message
-                {
-                    Type = MessageType.SessionKey,
-                    Sender = _username,
-                    PublicKey = encryptedKey
-                };
-                _client?.Send(sessionMessage);
-                _keyExchange.Complete();
-                _client.SessionKey = new AesEncryption(_keyExchange.SessionKey!);
-                _ui?.DisplaySystem("Key exchange complete, session key established.");
-    
-            }
-            else if (message.Type == MessageType.SessionKey && message.PublicKey != null
-                && !_keyExchange.IsEstablished)
-            {
-                _keyExchange.ReceiveEncryptedSessionKey(message.PublicKey);
-                _client.SessionKey = new AesEncryption(_keyExchange.SessionKey!);
-                _ui?.DisplaySystem("Session key received and decrypted, secure communication established.");
-            }
-            else if (message.Type == MessageType.Text)
-            {
+            if (message.Type == MessageType.Text)
                 _queue.EnqueueIncoming(message);
-            }
         };
 
         _server.OnPeerConnected += peer => _ui?.DisplaySystem($"Peer connected from {peer.Address}:{peer.Port}");
         _server.OnPeerDisconnected += peer => _ui?.DisplaySystem($"Peer disconnected: {peer.Address}:{peer.Port}");
 
-        _peerDiscovery.OnPeerDiscovered += async peer =>
-        {
-            _ui?.DisplaySystem($"Peer discovered: {peer.Id} at {peer.Address}:{peer.Port}");
-            if (!_peers.ContainsKey(peer.Id) &&
-                string.Compare(_peerDiscovery.LocalPeerId, peer.Id, StringComparison.Ordinal) < 0)
-                await ConnectToPeer(peer);
-        };
         _peerDiscovery.OnPeerLost += peer =>
         {
             _ui?.DisplaySystem($"Peer {peer.Id} lost (30s with no broadcast)");
@@ -257,6 +249,7 @@ class Program
                             KeyExchange = _keyExchange,
                             IsConnected = true,
                         };
+                        WireClientEvents(connected);
                         _peers[connected.Id] = connected;
                         _heartbeatMonitor.StartMonitoring(connected.Id);
                         _ui?.DisplaySystem($"Manually connected as peer {connected.Id}");
@@ -310,59 +303,112 @@ class Program
                     _history.ShowHistory();
                     break;
                 case CommandType.Create:
-                    // await _server.CreateRoom(int.Parse(commandResult.Args[0]));
-                    if (_client?.IsConnected == true) 
+                {
+                    string roomName = commandResult.Args[0];
+                    _roomMembers.GetOrAdd(roomName, _ => new HashSet<string>());
+                    var members = _roomMembers[roomName];
+                    lock (members) members.Add(_peerDiscovery.LocalPeerId);
+                    _myRooms.Add(roomName);
+
+                    var announce = new Message
                     {
-                        var command = new Message { Sender = _username + await _client.getClientID(), Content = "/create " + commandResult.Args[0] };
-                        _client.Send(command);
-                    }
-                    else
-                    {
-                        await _server.CreateRoom(commandResult.Args[0]);
-                        _ui.DisplaySystem($"Room {commandResult.Args[0]} created.");
-                    }
+                        Type = MessageType.RoomJoin,
+                        Sender = _peerDiscovery.LocalPeerId,
+                        Room = roomName
+                    };
+                    await BroadcastToAllPeersParallel(announce);
+                    _ui?.DisplaySystem($"Room #{roomName} created and joined.");
                     break;
+                }
                 case CommandType.Rooms:
-                    if (_client?.IsConnected == true) 
+                {
+                    if (_roomMembers.IsEmpty)
                     {
-                        var command = new Message { Sender = _username + await _client.getClientID(), Content = "/rooms" };
-                        _client.Send(command);
+                        _ui?.DisplaySystem("No rooms known. Use /create #<name> to make one.");
+                        break;
                     }
-                    else
+                    Console.WriteLine("--- Known Rooms ---");
+                    foreach (var (name, members) in _roomMembers)
                     {
-                        List<string> _rooms = _server.GetRooms();
-                        foreach (string room in _rooms)
-                        {
-                            Console.WriteLine(room);
-                        }
+                        string tag = _myRooms.Contains(name) ? " [joined]" : "";
+                        Console.WriteLine($"  #{name} ({members.Count} members){tag}");
                     }
+                    Console.WriteLine("--- End of Rooms ---");
                     break;
+                }
                 case CommandType.Join:
-                    if (_client?.IsConnected == true)
+                {
+                    string roomName = commandResult.Args[0];
+                    if (!_roomMembers.ContainsKey(roomName))
                     {
-                        var command = new Message { Sender = _username + await _client.getClientID(), Content = "/join " + commandResult.Args[0] };
-                        _client.Send(command);
+                        _ui?.DisplaySystem($"Room #{roomName} doesn't exist. Use /create {roomName} first.");
+                        break;
                     }
-                    else
+                    var roomMembers = _roomMembers[roomName];
+                    lock (roomMembers) roomMembers.Add(_peerDiscovery.LocalPeerId);
+                    _myRooms.Add(roomName);  // <-- this is also missing from your current /join!
+
+                    var announce = new Message
                     {
-                        _ui.DisplaySystem($"Not connected to a server");
-                    }
+                        Type = MessageType.RoomJoin,
+                        Sender = _peerDiscovery.LocalPeerId,
+                        Room = roomName
+                    };
+                    _ui?.DisplaySystem($"Broadcasting to {_peers.Count} peers...");
+                    await BroadcastToAllPeersParallel(announce);
+                    _ui?.DisplaySystem($"Joined #{roomName}");
                     break;
+                }
                 case CommandType.Leave:
-                    if (_client?.IsConnected == true)
+                {
+                    string roomName = commandResult.Args[0];
+                    if (!_myRooms.Contains(roomName))
                     {
-                        var command = new Message { Sender = _username + await _client.getClientID(), Content = "/leave " + commandResult.Args[0] };
-                        _client.Send(command);
+                        _ui?.DisplaySystem($"You haven't joined #{roomName}.");
+                        break;
                     }
+                    _myRooms.Remove(roomName);
+                    if (_roomMembers.TryGetValue(roomName, out var members))
+                        lock (members) members.Remove(_peerDiscovery.LocalPeerId);
+
+                    var announce = new Message
+                    {
+                        Type = MessageType.RoomLeave,
+                        Sender = _peerDiscovery.LocalPeerId,
+                        Room = roomName
+                    };
+                    await BroadcastToAllPeersParallel(announce);
+                    _ui?.DisplaySystem($"Left #{roomName}");
                     break;
+                }
                 case CommandType.Message:
+                {
                     string msgTarget = commandResult.Args![0];
                     string msgContent = string.Join(" ", commandResult.Args[1..]);
-                    if (msgTarget.StartsWith('@'))
+                    
+                    if (msgTarget.StartsWith('#'))
+                    {
+                        string roomName = msgTarget[1..];
+                        if (!_myRooms.Contains(roomName))
+                        {
+                            _ui?.DisplaySystem($"You haven't joined #{roomName}. Use /join {roomName} first.");
+                            break;
+                        }
+                        var roomMsg = new Message
+                        {
+                            Type = MessageType.RoomMessage,
+                            Sender = _username + await _client.getClientID(),
+                            Room = roomName,
+                            Content = msgContent
+                        };
+                        _queue.EnqueueIncoming(roomMsg);  // show locally too
+                        await BroadcastToRoomPeers(roomName, roomMsg);
+                    }
+                    else if (msgTarget.StartsWith('@'))
                     {
                         string targetPeerId = msgTarget[1..];
                         if (_peers.TryGetValue(targetPeerId, out Peer? targetPeer) && targetPeer.Outbound != null)
-                            targetPeer.Outbound.Send(new Message { Sender = _username, Content = msgContent, TargetPeerId = targetPeerId });
+                            targetPeer.Outbound.Send(new Message { Type = MessageType.Text, Sender = _username + await _client.getClientID(), Content = msgContent, TargetPeerId = targetPeerId });
                         else
                             _ui?.DisplaySystem($"Peer '{targetPeerId}' not connected. Use /peers to see available peers.");
                     }
@@ -372,6 +418,7 @@ class Program
                         _client.Send(command);
                     }
                     break;
+                }
                 default:
                     {
                         var msg = new Message { Sender = _username + (_client?.IsConnected == true ? await _client.getClientID() : 0), Content = commandResult.Message! };
@@ -466,6 +513,24 @@ class Program
             {
                 _queue.EnqueueIncoming(message);
             }
+            else if (message.Type == MessageType.RoomJoin && message.Room != null)
+            {
+                var members = _roomMembers.GetOrAdd(message.Room, _ => new HashSet<string>());
+                lock (members) members.Add(message.Sender);
+                _ui?.DisplaySystem($"{message.Sender} joined room #{message.Room}");
+            }
+            else if (message.Type == MessageType.RoomLeave && message.Room != null)
+            {
+                if (_roomMembers.TryGetValue(message.Room, out var members))
+                    lock (members) members.Remove(message.Sender);
+                _ui?.DisplaySystem($"{message.Sender} left room #{message.Room}");
+            }
+            else if (message.Type == MessageType.RoomMessage && message.Room != null)
+            {
+                // only display it if we're in that room
+                if (_myRooms.Contains(message.Room))
+                    _queue.EnqueueIncoming(message);
+            }
         };
 
         client.OnDisconnected += _ => HandlePeerConnectionFailed(peer);
@@ -494,4 +559,17 @@ class Program
         // TPL: parallel AES encryption + network send to each connected peer
         await Task.WhenAll(snapshot.Select(c => Task.Run(() => c.Send(msg))));
     }
+
+    private static async Task BroadcastToRoomPeers(string roomName, Message msg)
+    {
+        if (!_roomMembers.ContainsKey(roomName)) return;
+
+        var targets = _peers.Values
+            .Where(p => p.Outbound != null)
+            .Select(p => p.Outbound!)
+            .ToList();
+
+        await Task.WhenAll(targets.Select(c => Task.Run(() => c.Send(msg))));
+    }
+
 }
