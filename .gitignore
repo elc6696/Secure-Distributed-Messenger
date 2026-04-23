@@ -2,3 +2,4 @@ bin/
 obj/
 Secure-Distributed-Messenger.sln
 /.vs
+message_history.json
