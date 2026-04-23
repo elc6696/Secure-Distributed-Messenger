@@ -20,7 +20,10 @@ public enum MessageType
     KeyExchange,    // Sprint 2: Public key exchange
     SessionKey,     // Sprint 2: Encrypted session key
     Heartbeat,      // Sprint 3: Connection health check
-    PeerDiscovery   // Sprint 3: Peer announcement
+    PeerDiscovery,   // Sprint 3: Peer announcement
+    RoomJoin,
+    RoomLeave,
+    RoomMessage
 }
 
 /// <summary>
@@ -39,6 +42,7 @@ public class Message
     /// Sprint 2-3: Use other types for protocol messages
     /// </summary>
     public MessageType Type { get; set; } = MessageType.Text;
+    public string? Room { get; set; } 
 
     // Sprint 2: Security fields
     public byte[]? Signature { get; set; }

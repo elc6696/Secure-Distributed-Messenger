@@ -70,16 +70,14 @@ public class ConsoleUI
         Console.WriteLine("  /peers                - Show connection status");
         Console.WriteLine("  /history              - View message history (Sprint 3)");
         Console.WriteLine("  /quit                 - Exit the application");
-        Console.WriteLine("  /create <room#>       - Create a room of that number");
-        Console.WriteLine("  /join <room#>         - Join the room of that number");
-        Console.WriteLine("  /leave <room#>        - Leave the room of that number");
+        Console.WriteLine("  /create #<room>       - Create a room of that name");
+        Console.WriteLine("  /join #<room>         - Join the room of that name");
+        Console.WriteLine("  /leave #<room>        - Leave the room of that name");
         Console.WriteLine("  /rooms                - List all rooms");
-        Console.WriteLine("  /msg <room#> <msg>    - Message the room of that number");
-        Console.WriteLine();
-        Console.WriteLine("Sprint Progression:");
-        Console.WriteLine("  Sprint 1: Basic /connect and /listen with message sending");
-        Console.WriteLine("  Sprint 2: Messages are encrypted end-to-end");
-        Console.WriteLine("  Sprint 3: Automatic peer discovery and reconnection");
+        Console.WriteLine("  /msg #<room> <msg>    - Message the room of that number");
+        Console.WriteLine("  /msg @<id> <msg>      - Message the peer of that id");
+        Console.WriteLine("  /peers                - List all peers");
+        Console.WriteLine("  /history              - Display message history");
         Console.WriteLine();
     }
 
@@ -155,7 +153,7 @@ public class ConsoleUI
                     commandResult.CommandType = CommandType.Help;
                     return commandResult;
                 case "/create":
-                    if (inputsplit.Length != 2)
+                    if (inputsplit.Length != 2 || !inputsplit[1].StartsWith('#'))
                     {
                         commandResult.CommandType = CommandType.Unknown;
                         return commandResult;
@@ -163,11 +161,11 @@ public class ConsoleUI
                     else
                     {
                         commandResult.CommandType = CommandType.Create;
-                        commandResult.Args = [inputsplit[1]];
+                        commandResult.Args = [inputsplit[1][1..]];
                         return commandResult;
                     }
                 case "/join":
-                    if (inputsplit.Length != 2)
+                    if (inputsplit.Length != 2 || !inputsplit[1].StartsWith('#'))
                     {
                         commandResult.CommandType = CommandType.Unknown;
                         return commandResult;
@@ -175,11 +173,11 @@ public class ConsoleUI
                     else
                     {
                         commandResult.CommandType = CommandType.Join;
-                        commandResult.Args = [inputsplit[1]];
+                        commandResult.Args = [inputsplit[1][1..]];
                         return commandResult;
                     }
                 case "/leave":
-                    if (inputsplit.Length != 2)
+                    if (inputsplit.Length != 2 || !inputsplit[1].StartsWith('#'))
                     {
                         commandResult.CommandType = CommandType.Unknown;
                         return commandResult;
@@ -187,7 +185,7 @@ public class ConsoleUI
                     else
                     {
                         commandResult.CommandType = CommandType.Leave;
-                        commandResult.Args = [inputsplit[1]];
+                        commandResult.Args = [inputsplit[1][1..]];
                         return commandResult;
                     }
                 case "/rooms":
