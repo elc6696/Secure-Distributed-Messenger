@@ -217,47 +217,46 @@ class Program
             switch(commandResult.CommandType)
             {
                 case CommandType.Connect:
-                    string targetIp;
-                    int targetPort;
-                    if(commandResult.Args[0] == "local") {
-                        targetIp = "127.0.0.1";
-                        targetPort = 5001;
-                        await _client.ConnectAsync(targetIp, targetPort);
-                    }else {
-                        targetIp = commandResult.Args[0];
-                        targetPort = int.Parse(commandResult.Args[1]);
-                        await _client.ConnectAsync(targetIp, targetPort);
-                    }
-                    _client.setClientID(Random.Shared.Next(1, 1000)); // Assign a random client ID for demonstration
-                    // Sprint 2 Addition with Key Exchange:
-                    _keyExchange = new KeyExchange();
-                    _myPublicKey = _keyExchange.GetPublicKey();
-                    var publicKeyMessage = new Message
+                    string targetIp = commandResult.Args[0] == "local" ? "127.0.0.1" : commandResult.Args[0];
+                    int targetPort = commandResult.Args[0] == "local" ? 5001 : int.Parse(commandResult.Args[1]);
+                    // create a fresh Client per connection so multiple /connect calls don't share state
+                    var manualClient = new Client();
+                    _client = manualClient;
+                    bool manualConnected = await manualClient.ConnectAsync(targetIp, targetPort);
+                    if (manualConnected)
                     {
-                        Type = MessageType.KeyExchange,
-                        Sender = _username,
-                        PublicKey = _myPublicKey
-                    };
-                    _client.Send(publicKeyMessage);
-                    if (_client.IsConnected)
-                    {
+                        var kx = new KeyExchange();
+                        _keyExchange = kx;
+                        _myPublicKey = kx.GetPublicKey();
                         var connected = new Peer
                         {
                             Address = IPAddress.TryParse(targetIp, out var parsed) ? parsed : IPAddress.None,
                             Port = targetPort,
-                            Outbound = _client,
-                            KeyExchange = _keyExchange,
+                            Outbound = manualClient,
+                            KeyExchange = kx,
                             IsConnected = true,
                         };
                         WireClientEvents(connected);
+                        var reconnectPolicy = new ReconnectionPolicy(manualClient);
+                        connected.ReconnectPolicy = reconnectPolicy;
+                        WireReconnectEvents(reconnectPolicy, connected.Id);
                         _peers[connected.Id] = connected;
                         _heartbeatMonitor.StartMonitoring(connected.Id);
+                        manualClient.Send(new Message { Type = MessageType.KeyExchange, Sender = _username, PublicKey = _myPublicKey });
                         _ui?.DisplaySystem($"Manually connected as peer {connected.Id}");
                     }
                     break;
                 case CommandType.Listen:
                     int listenPort = commandResult.Args[0] == "local" ? 5001 : int.Parse(commandResult.Args[0]);
-                    await _server.Start(listenPort);
+                    try
+                    {
+                        await _server.Start(listenPort);
+                    }
+                    catch (SocketException ex)
+                    {
+                        _ui?.DisplaySystem($"Cannot listen on port {listenPort}: {ex.Message}. Try a different port.");
+                        break;
+                    }
                     try
                     {
                         _peerDiscovery.Start(listenPort);
@@ -557,7 +556,17 @@ class Program
         var snapshot = _peers.Values.Select(p => p.Outbound).Where(c => c != null).Cast<Client>().ToList();
         if (snapshot.Count == 0) return;
         // TPL: parallel AES encryption + network send to each connected peer
-        await Task.WhenAll(snapshot.Select(c => Task.Run(() => c.Send(msg))));
+        // each Task gets its own Message copy so parallel Send() calls don't race on signature/encryption fields
+        await Task.WhenAll(snapshot.Select(c => Task.Run(() => c.Send(new Message
+        {
+            Id = msg.Id,
+            Sender = msg.Sender,
+            Content = msg.Content,
+            Timestamp = msg.Timestamp,
+            Type = msg.Type,
+            Room = msg.Room,
+            TargetPeerId = msg.TargetPeerId
+        }))));
     }
 
     private static async Task BroadcastToRoomPeers(string roomName, Message msg)

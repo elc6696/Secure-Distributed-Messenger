@@ -95,6 +95,9 @@ public class AesEncryption
         }
     }
 
+
+    
+
     /// <summary>
     /// Decrypt ciphertext back to plaintext.
     ///
@@ -116,7 +119,7 @@ public class AesEncryption
     /// </summary>
     public string Decrypt(byte[] ciphertext)
     {
-        using (Aes aes = Aes.Create())  
+        using (Aes aes = Aes.Create())
         {
             aes.Key = _key;
             aes.Mode = CipherMode.CBC;
@@ -134,4 +137,5 @@ public class AesEncryption
             return Encoding.UTF8.GetString(plaintextBytes);
         }
     }
+
 }
