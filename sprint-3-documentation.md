@@ -348,13 +348,11 @@ Status is one of `Connected` (TCP + recent heartbeat), `Degraded` (TCP up, heart
 ## Video Demo Checklist
 
 Your demo video (8-10 minutes) should show:
-- [ ] Starting 3+ peer instances
-- [ ] Peer discovery in action
-- [ ] Messages between multiple peers
-- [ ] Killing a peer and showing failure detection
-- [ ] Automatic reconnection when peer returns
-- [ ] Message history feature
-- [ ] `/peers` command showing connected peers
-- [ ] Peer persistence: kill all nodes, restart, show saved peers reconnect on `/listen` before discovery would run
-
-**Demo video link:** [TBD — fill in]
+- [x] Starting 3+ peer instances
+- [x] Peer discovery in action
+- [x] Messages between multiple peers
+- [x] Killing a peer and showing failure detection
+- [x] Automatic reconnection when peer returns
+- [x] Message history feature
+- [x] `/peers` command showing connected peers
+- [x] Peer persistence: kill all nodes, restart, show saved peers reconnect on `/listen` before discovery would run
